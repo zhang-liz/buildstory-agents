@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { trackEvent } from '@/lib/database';
 import { recordConversion } from '@/lib/agents/strategist';
 import { classifyPersona, extractPersonaContext, validatePersonaPoll } from '@/lib/agents/persona';
+import { WaterBottlePersona } from '@/lib/personas';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -70,12 +71,12 @@ async function processEvent(
   if (eventType === 'ctaClick' || eventType === 'conversion') {
     if (variantHash) {
       // Record conversion for bandit
-      await recordConversion(storyId, persona, sectionKey, variantHash, 1);
+      await recordConversion(storyId, persona as WaterBottlePersona, sectionKey, variantHash, 1);
     }
   }
 
   // Track all events
-  await trackEvent(storyId, persona, sectionKey, variantHash || '', eventType, meta);
+  await trackEvent(storyId, persona as WaterBottlePersona, sectionKey, variantHash || '', eventType, meta);
 
   return { success: true };
 }
