@@ -164,6 +164,83 @@ Environment, Supabase, OpenAI, and persona health check
 ### GET /s/[storyId]
 Server-side rendered landing page with agent optimizations (supports `?persona=` overrides)
 
+## 📊 Metrics and Evaluation
+
+The system collects detailed metrics to monitor agent performance and optimize content generation. Metrics are available via the `metrics` utility.
+
+### Core Metrics
+
+1. **Agent Operations**
+   - Tracks success/failure of agent operations
+   - Includes operation type, duration, and status
+   - Example: `agent_operation { agent_type: 'PersonaAgent', operation: 'classify', status: 'success', duration_ms: 125 }`
+
+2. **Latency**
+   - Measures processing time for agent operations
+   - Helps identify performance bottlenecks
+   - Example: `agent_metrics { type: 'latency', agent_type: 'SectionAgent', operation: 'generate', value: 320 }`
+
+3. **Errors**
+   - Tracks errors by type and agent
+   - Includes error messages for debugging
+   - Example: `agent_metrics { type: 'error', agent_type: 'BrandGuardian', error_type: 'ValidationError', operation: 'validate' }`
+
+4. **Bandit Performance**
+   - Tracks variant selection and conversion rates
+   - Helps optimize content performance
+
+### Accessing Metrics
+
+```typescript
+import { metrics } from './lib/metrics';
+
+// Get all metrics
+const metricsData = metrics.getMetrics();
+console.log(metricsData);
+
+// Example: Get error count by type
+const errorCount = metricsData.metrics
+  .filter(m => m.name === 'error_count')
+  .reduce((sum, m) => sum + (m.values['agent_type=PersonaAgent,error_type=APIError'] || 0), 0);
+```
+
+### Using withMetrics
+
+Wrap agent operations to automatically track metrics:
+
+```typescript
+import { withMetrics } from './lib/metrics';
+
+async function processRequest() {
+  return withMetrics('MyAgent', 'processRequest', async () => {
+    // Your agent logic here
+    const result = await someAsyncOperation();
+    return result;
+  }, { requestId: 'req-123' }); // Optional metadata
+}
+```
+
+### Monitoring and Alerting
+
+1. **Performance Monitoring**
+   - Set up alerts for high latency operations
+   - Monitor error rates by agent type
+   - Track conversion rates for different variants
+
+2. **Example Alerts**
+   - Alert if error rate exceeds 5% for any agent
+   - Notify if average latency exceeds 1s
+   - Track conversion rate drops
+
+### Testing
+
+Unit tests for metrics collection are available in `src/lib/__tests__/agentMetrics.test.ts`.
+
+To run tests:
+```bash
+npx vitest run
+```
+
 ## 🎨 Section Types
 
 ### Hero
