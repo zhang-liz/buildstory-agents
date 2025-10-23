@@ -275,7 +275,7 @@ The system uses carefully crafted prompts for different agents:
 - **Rewriter**: Optimizes individual sections for specific goals
 - **Brand Guardian**: Ensures consistency with brand guidelines
 
-All LLM calls target the `gpt-4` chat completions endpoint and require `OPENAI_API_KEY` to be present.
+All LLM calls target the `gpt-5` chat completions endpoint and require `OPENAI_API_KEY` to be present.
 
 Prompts include persona targeting, tone enforcement, and structural constraints.
 
