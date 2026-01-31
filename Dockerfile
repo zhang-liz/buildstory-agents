@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-alpine AS base
+FROM oven/bun:1-alpine AS base
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json bun.lock* ./
+RUN bun install --frozen-lockfile
 
 # Copy source
 COPY . .
 
 EXPOSE 3000
-CMD ["npm", "run", "dev"]
+CMD ["bun", "run", "dev"]

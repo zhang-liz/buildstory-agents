@@ -1,67 +1,70 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { useCallback, useState } from "react";
+import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
+import {
+  COLOR_OPTIONS,
+  DEFAULT_BRAND_NAME,
+  DEFAULT_BRIEF,
+  PALETTE_EXTRA,
+  PERSONA_CARDS,
+  TONE_OPTIONS,
+} from "./constants";
+
+interface FormState {
+  brief: string;
+  tone: string;
+  brandName: string;
+  palette: string;
+}
+
+const INITIAL_FORM: FormState = {
+  brief: DEFAULT_BRIEF,
+  tone: "professional",
+  brandName: DEFAULT_BRAND_NAME,
+  palette: "#059669",
+};
 
 export default function HomePage() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    brief: 'Premium insulated water bottle designed for active lifestyles. Features double-wall vacuum insulation, leak-proof cap, and ergonomic design.',
-    tone: 'professional',
-    brandName: 'HydroFlow',
-    palette: '#059669'
-  });
+  const [formData, setFormData] = useState<FormState>(INITIAL_FORM);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setIsLoading(true);
 
-    try {
-      const palette = [formData.palette, '#15803d', '#0d9488']; // Generate palette from selected color
+      try {
+        const palette = [formData.palette, ...PALETTE_EXTRA];
+        const response = await fetch("/api/story", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            brief: formData.brief,
+            tone: formData.tone,
+            brandName: formData.brandName || DEFAULT_BRAND_NAME,
+            palette,
+          }),
+        });
 
-      const response = await fetch('/api/story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          brief: formData.brief,
-          tone: formData.tone,
-          brandName: formData.brandName || 'HydroFlow',
-          palette
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        router.push(`/s/${data.storyId}`);
-      } else {
-        const error = await response.json();
-        alert(`Error: ${error.error}`);
+        if (response.ok) {
+          const data = await response.json();
+          router.push(`/s/${data.storyId}`);
+        } else {
+          const error = await response.json();
+          alert(`Error: ${error.error}`);
+        }
+      } catch (error) {
+        console.error("Error creating story:", error);
+        alert("Failed to create story. Please try again.");
+      } finally {
+        setIsLoading(false);
       }
-    } catch (error) {
-      console.error('Error creating story:', error);
-      alert('Failed to create story. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const toneOptions = [
-    { value: 'professional', label: 'Professional', description: 'Clean, trustworthy' },
-    { value: 'friendly', label: 'Friendly', description: 'Approachable, warm' },
-    { value: 'bold', label: 'Bold', description: 'Energetic, confident' },
-    { value: 'premium', label: 'Premium', description: 'Sophisticated, quality' }
-  ];
-
-  const colorOptions = [
-    { value: '#059669', label: 'Emerald', bg: 'bg-emerald-600' },
-    { value: '#0d9488', label: 'Teal', bg: 'bg-teal-600' },
-    { value: '#d97706', label: 'Amber', bg: 'bg-amber-600' },
-    { value: '#e11d48', label: 'Rose', bg: 'bg-rose-600' },
-    { value: '#15803d', label: 'Green', bg: 'bg-green-700' },
-    { value: '#0891b2', label: 'Cyan', bg: 'bg-cyan-600' }
-  ];
+    },
+    [formData, router]
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50">
@@ -102,28 +105,7 @@ export default function HomePage() {
 
           {/* Persona Cards */}
           <div className="grid md:grid-cols-4 gap-6 mb-16">
-            {[
-              {
-                icon: '🏃',
-                title: 'Athletes',
-                description: 'Performance-focused messaging, training features, endurance benefits'
-              },
-              {
-                icon: '💼',
-                title: 'Commuters',
-                description: 'Daily convenience, office-friendly, cup holder compatibility'
-              },
-              {
-                icon: '⛰️',
-                title: 'Outdoor',
-                description: 'Durability emphasis, insulation stats, adventure-ready features'
-              },
-              {
-                icon: '👨‍👩‍👧‍👦',
-                title: 'Families',
-                description: 'Safety certifications, spill-proof design, kid-friendly options'
-              }
-            ].map((persona, index) => (
+            {PERSONA_CARDS.map((persona, index) => (
               <motion.div
                 key={persona.title}
                 className="p-6 bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow"
@@ -202,7 +184,7 @@ export default function HomePage() {
                   type="text"
                   value={formData.brandName}
                   onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
-                  placeholder="HydroFlow"
+                  placeholder={DEFAULT_BRAND_NAME}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                 />
               </div>
@@ -213,7 +195,7 @@ export default function HomePage() {
                   Brand Voice
                 </label>
                 <div className="grid grid-cols-2 gap-3">
-                  {toneOptions.map((tone) => (
+                  {TONE_OPTIONS.map((tone) => (
                     <label
                       key={tone.value}
                       className={`p-4 border-2 rounded-lg cursor-pointer transition-all ${
@@ -243,7 +225,7 @@ export default function HomePage() {
                   Primary Brand Color
                 </label>
                 <div className="flex space-x-3">
-                  {colorOptions.map((color) => (
+                  {COLOR_OPTIONS.map((color) => (
                     <label
                       key={color.value}
                       className={`w-12 h-12 rounded-lg cursor-pointer transition-all ${

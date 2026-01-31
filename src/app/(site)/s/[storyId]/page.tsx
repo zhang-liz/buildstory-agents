@@ -9,8 +9,8 @@ import { WaterBottlePersona } from '@/lib/personas';
 import { headers } from 'next/headers';
 
 interface PageProps {
-  params: { storyId: string };
-  searchParams: { persona?: string };
+  params: Promise<{ storyId: string }>;
+  searchParams: Promise<{ persona?: string }>;
 }
 
 // Assemble storyboard with agent decisions
@@ -50,7 +50,10 @@ async function assembleStoryboard(
 }
 
 export default async function StoryPage({ params, searchParams }: PageProps) {
-  const { storyId } = params;
+  const [{ storyId }, resolvedSearchParams] = await Promise.all([
+    params,
+    searchParams,
+  ]);
 
   // Get story
   const story = await getStory(storyId);
@@ -61,21 +64,23 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
   // Extract persona context from request headers
   const headersList = await headers();
   const headersObject: Record<string, string> = {};
-
-  // Convert headers to plain object
   for (const [key, value] of headersList.entries()) {
     headersObject[key] = value;
   }
-
-  const mockRequest = new Request('http://localhost', {
-    headers: headersObject
+  const mockRequest = new Request("http://localhost", {
+    headers: headersObject,
   });
-
   const personaContext = extractPersonaContext(mockRequest);
 
   // Override persona if specified in search params
-  if (searchParams.persona && ['athlete', 'commuter', 'outdoor', 'family'].includes(searchParams.persona)) {
-    personaContext.pollResult = searchParams.persona as WaterBottlePersona;
+  if (
+    resolvedSearchParams.persona &&
+    ["athlete", "commuter", "outdoor", "family"].includes(
+      resolvedSearchParams.persona
+    )
+  ) {
+    personaContext.pollResult =
+      resolvedSearchParams.persona as WaterBottlePersona;
   }
 
   const personaResult = await classifyPersona(personaContext);
@@ -121,7 +126,8 @@ export const revalidate = 60; // Revalidate every minute
 
 // Generate metadata
 export async function generateMetadata({ params }: PageProps) {
-  const story = await getStory(params.storyId);
+  const { storyId } = await params;
+  const story = await getStory(storyId);
 
   if (!story) {
     return {

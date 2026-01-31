@@ -28,7 +28,7 @@ BuildStory.Agents is a Next.js application where autonomous AI agents generate, 
 - Per-section, per-persona optimization
 
 ### Tech Stack
-- **Framework**: Next.js 14 with App Router
+- **Framework**: Next.js 16 with App Router
 - **Database**: Supabase (PostgreSQL)
 - **Caching**: Redis/Upstash (optional)
 - **AI**: OpenAI GPT-4 for content generation
@@ -39,7 +39,8 @@ BuildStory.Agents is a Next.js application where autonomous AI agents generate, 
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
-- Node.js 18+ and Bun
+- [Bun](https://bun.sh) (primary package manager and runtime)
+- Node.js 20+ optional (for some tooling)
 - Supabase account
 - OpenAI API key
 

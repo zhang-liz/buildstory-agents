@@ -2,16 +2,18 @@
 
 import { useEffect } from "react";
 
-export default function ClientBody({
-  children,
-}: {
+interface ClientBodyProps {
   children: React.ReactNode;
-}) {
-  // Remove any extension-added classes during hydration
+}
+
+/**
+ * Client wrapper that resets body className after hydration (e.g. to clear
+ * extension-injected classes). Renders children without an extra DOM node.
+ */
+export default function ClientBody({ children }: ClientBodyProps) {
   useEffect(() => {
-    // This runs only on the client after hydration
     document.body.className = "antialiased";
   }, []);
 
-  return <div className="antialiased">{children}</div>;
+  return <>{children}</>;
 }
