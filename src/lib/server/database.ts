@@ -1,10 +1,18 @@
+import 'server-only';
 import { createClient } from '@supabase/supabase-js';
 import { BanditState } from './bandit';
-import { Storyboard } from './storyboard';
-import { WaterBottlePersona } from './personas';
+import { Storyboard } from '@/lib/storyboard';
+import { WaterBottlePersona } from '@/lib/personas';
 
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables. ' +
+    'Set them in .env.local or your deployment environment.'
+  );
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -12,7 +20,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export interface Story {
   id: string;
   brief: string;
-  brand: any; // JSON
+  brand: Record<string, unknown>;
   created_at: string;
 }
 
@@ -40,12 +48,12 @@ export interface Event {
   section_key: string;
   variant_hash: string;
   event: string;
-  meta: any; // JSON
+  meta: Record<string, unknown>; // event payload JSON
   ts: string;
 }
 
 // Story operations
-export async function createStory(brief: string, brand: any): Promise<Story> {
+export async function createStory(brief: string, brand: Record<string, unknown>): Promise<Story> {
   const { data, error } = await supabase
     .from('stories')
     .insert([{ brief, brand }])
@@ -183,7 +191,7 @@ export async function trackEvent(
   sectionKey: string,
   variantHash: string,
   event: string,
-  meta: any = {}
+  meta: Record<string, unknown> = {}
 ): Promise<void> {
   const { error } = await supabase
     .from('events')

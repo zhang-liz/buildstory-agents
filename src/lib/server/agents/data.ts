@@ -1,5 +1,7 @@
-import { QuotesSection } from '../storyboard';
-import { WaterBottlePersona } from '../personas';
+import 'server-only';
+import { QuotesSection } from '@/lib/storyboard';
+import { WaterBottlePersona } from '@/lib/personas';
+import { getOpenAIModel } from '../config';
 import { getRecentEvents, Event } from '../database';
 
 export interface ProofInsight {
@@ -49,7 +51,7 @@ function analyzeEvents(events: Event[]): ProofInsight[] {
   const dwellEvents = events.filter(e => e.event === 'dwell');
   if (dwellEvents.length > 0) {
     const avgDwellTime = dwellEvents.reduce((sum, e) =>
-      sum + (e.meta?.duration || 0), 0) / dwellEvents.length;
+      sum + (Number((e.meta as Record<string, unknown>)?.duration) || 0), 0) / dwellEvents.length;
 
     if (avgDwellTime > 30) { // 30+ seconds
       insights.push({
@@ -94,7 +96,7 @@ function analyzeEvents(events: Event[]): ProofInsight[] {
   // Performance indicators
   const scrollDepthEvents = events.filter(e => e.event === 'scrollDepth');
   if (scrollDepthEvents.length > 0) {
-    const maxScrollDepth = Math.max(...scrollDepthEvents.map(e => e.meta?.depth || 0));
+    const maxScrollDepth = Math.max(...scrollDepthEvents.map(e => Number((e.meta as Record<string, unknown>)?.depth) || 0));
     if (maxScrollDepth > 80) { // 80%+ scroll depth
       insights.push({
         type: 'engagement',
@@ -147,7 +149,7 @@ Generate testimonials for ${persona} persona.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: getOpenAIModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -165,7 +167,7 @@ Generate testimonials for ${persona} persona.`;
     const content = data.choices[0].message.content;
     const quotes = JSON.parse(content);
 
-    return quotes.map((quote: any) => ({
+    return (quotes as Array<{ text: string; role: string }>).map((quote) => ({
       ...quote,
       source: 'generated' as const,
       credibility: 0.7

@@ -1,5 +1,6 @@
-import { Section, generateVariantHash } from '../storyboard';
-import { WaterBottlePersona } from '../personas';
+import 'server-only';
+import { Section, generateVariantHash } from '@/lib/storyboard';
+import { WaterBottlePersona } from '@/lib/personas';
 import {
   chooseVariant,
   initializeBanditArm,
@@ -75,9 +76,8 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
 
   // Use Thompson Sampling to choose variant
   const chosenArm = await chooseVariant(banditArms);
-  const chosenVariant = availableVariants.find(async (v) =>
-    await generateVariantHash(v) === chosenArm.variant
-  );
+  const chosenIndex = banditArms.findIndex(arm => arm.arm.variant === chosenArm.variant);
+  const chosenVariant = chosenIndex >= 0 ? availableVariants[chosenIndex] : undefined;
 
   if (!chosenVariant) {
     throw new Error('Could not find chosen variant');

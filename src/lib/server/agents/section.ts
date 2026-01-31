@@ -1,5 +1,7 @@
-import { Section, parseSection } from '../storyboard';
-import { WaterBottlePersona } from '../personas';
+import 'server-only';
+import { Section, parseSection } from '@/lib/storyboard';
+import { WaterBottlePersona } from '@/lib/personas';
+import { getOpenAIModel } from '../config';
 import { getSectionPerformance } from './strategist';
 
 export interface SectionContext {
@@ -35,7 +37,7 @@ export async function generateSection(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: getOpenAIModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -118,7 +120,7 @@ function getUserPrompt(
   sectionKey: string,
   persona: WaterBottlePersona,
   brief: string,
-  brand: any,
+  brand: SectionContext['brand'],
   existingSection?: Section,
   goal?: string
 ): string {
@@ -139,7 +141,7 @@ function getUserPrompt(
 
 // Template sections as fallbacks
 function getTemplateSection(sectionKey: string, persona: WaterBottlePersona, brief: string): Section {
-  const templates: Record<string, any> = {
+  const templates: Record<string, Section> = ({
     hero: {
       key: 'hero',
       type: 'hero',
@@ -202,9 +204,9 @@ function getTemplateSection(sectionKey: string, persona: WaterBottlePersona, bri
         ['What support do you provide?', '24/7 email support with enterprise phone support available.']
       ]
     }
-  };
+  } as Record<string, Section>);
 
-  return templates[sectionKey] || templates.hero;
+  return templates[sectionKey] ?? templates.hero;
 }
 
 // Validate section against brand guidelines

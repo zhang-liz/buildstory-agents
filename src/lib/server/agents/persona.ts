@@ -1,4 +1,5 @@
-import { WaterBottlePersona } from '../personas';
+import 'server-only';
+import { WaterBottlePersona } from '@/lib/personas';
 
 export interface PersonaResult {
   label: WaterBottlePersona;
@@ -12,7 +13,7 @@ interface PersonaContext {
   utmParams?: Record<string, string>;
   pollResult?: WaterBottlePersona;
   deviceType?: 'mobile' | 'tablet' | 'desktop';
-  sessionData?: Record<string, any>;
+  sessionData?: Record<string, unknown>;
   timeOfDay?: number;
   dayOfWeek?: number;
 }
@@ -153,9 +154,9 @@ export async function classifyPersona(context: PersonaContext): Promise<PersonaR
 
   // Session data analysis
   if (context.sessionData) {
-    const { searchTerms, viewedProducts, cartSize } = context.sessionData;
+    const { searchTerms, viewedProducts, cartSize } = context.sessionData as { searchTerms?: string; viewedProducts?: unknown; cartSize?: number };
 
-    if (searchTerms) {
+    if (typeof searchTerms === 'string') {
       const terms = searchTerms.toLowerCase();
       if (terms.includes('sport') || terms.includes('gym')) score.athlete += 0.3;
       if (terms.includes('office') || terms.includes('work')) score.commuter += 0.3;
@@ -163,7 +164,7 @@ export async function classifyPersona(context: PersonaContext): Promise<PersonaR
       if (terms.includes('kids') || terms.includes('spill')) score.family += 0.3;
     }
 
-    if (cartSize > 2) {
+    if (typeof cartSize === 'number' && cartSize > 2) {
       score.family += 0.2; // Multiple items suggests family shopping
       reasoning.push('Multiple items in cart');
     }

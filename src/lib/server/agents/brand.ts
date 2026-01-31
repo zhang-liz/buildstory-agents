@@ -1,4 +1,6 @@
-import { Section, Brand } from '../storyboard';
+import 'server-only';
+import { Section, Brand } from '@/lib/storyboard';
+import { getOpenAIModel } from '../config';
 
 export interface BrandValidationResult {
   isValid: boolean;
@@ -207,7 +209,7 @@ function validateContentQuality(section: Section): {
 
   // Check text length appropriateness
   if (section.type === 'hero') {
-    const heroSection = section as any;
+    const heroSection = section;
     if (heroSection.headline && heroSection.headline.length > 80) {
       suggestions.push('Consider shorter headline for better impact');
     }
@@ -229,7 +231,7 @@ function validateContentQuality(section: Section): {
 function extractTextFromSection(section: Section): string {
   let text = '';
 
-  const extractFromObject = (obj: any): void => {
+  const extractFromObject = (obj: unknown): void => {
     if (typeof obj === 'string') {
       text += obj + ' ';
     } else if (Array.isArray(obj)) {
@@ -268,7 +270,7 @@ Return ONLY the corrected JSON, maintaining the same structure and section type.
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: getOpenAIModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -337,7 +339,7 @@ Return ONLY the JSON, no explanations.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: getOpenAIModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }

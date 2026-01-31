@@ -1,3 +1,5 @@
+import 'server-only';
+
 type MetricType = 'counter' | 'gauge' | 'histogram';
 
 export interface MetricDefinition {
@@ -7,15 +9,27 @@ export interface MetricDefinition {
   labelNames?: string[];
 }
 
+interface StoredMetric {
+  name: string;
+  help: string;
+  type: MetricType;
+  values: Map<string, number>;
+  labelNames: string[];
+  inc: (labels?: Record<string, string>, value?: number) => void;
+  set: (labels: Record<string, string>, value: number) => void;
+  get: (labels?: Record<string, string>) => number;
+  reset: () => void;
+}
+
 class MetricsRegistry {
-  private metrics: Map<string, any> = new Map();
-  private customMetrics: Map<string, any> = new Map();
-  
+  private metrics: Map<string, StoredMetric> = new Map();
+  private customMetrics: Map<string, Record<string, unknown>> = new Map();
+
   createMetric(metric: MetricDefinition) {
     if (this.metrics.has(metric.name)) {
       return this.metrics.get(metric.name);
     }
-    
+
     const newMetric = {
       name: metric.name,
       help: metric.help,
@@ -39,21 +53,21 @@ class MetricsRegistry {
         newMetric.values.clear();
       }
     };
-    
+
     this.metrics.set(metric.name, newMetric);
     return newMetric;
   }
-  
-  recordMetric(name: string, data: Record<string, any>) {
+
+  recordMetric(name: string, data: Record<string, unknown>) {
     this.customMetrics.set(`${name}:${Date.now()}`, data);
   }
-  
+
   private getLabelKey(labels: Record<string, string>): string {
     return Object.entries(labels)
       .map(([key, value]) => `${key}="${value}"`)
       .join(',');
   }
-  
+
   getMetrics() {
     return {
       metrics: Array.from(this.metrics.values()).map(metric => ({
@@ -63,7 +77,7 @@ class MetricsRegistry {
       customMetrics: Object.fromEntries(this.customMetrics.entries())
     };
   }
-  
+
   reset() {
     this.metrics.clear();
     this.customMetrics.clear();
@@ -76,14 +90,14 @@ export async function withMetrics<T>(
   agentType: string,
   operation: string,
   fn: () => Promise<T>,
-  metadata: Record<string, any> = {}
+  metadata: Record<string, unknown> = {}
 ): Promise<T> {
   const start = Date.now();
-  
+
   try {
     const result = await fn();
     const duration = Date.now() - start;
-    
+
     // Record successful operation
     metrics.recordMetric('agent_operation', {
       ...metadata,
@@ -93,7 +107,7 @@ export async function withMetrics<T>(
       duration_ms: duration,
       timestamp: new Date().toISOString()
     });
-    
+
     // Record latency
     metrics.recordMetric('agent_metrics', {
       ...metadata,
@@ -103,13 +117,13 @@ export async function withMetrics<T>(
       value: duration,
       timestamp: new Date().toISOString()
     });
-    
+
     return result;
   } catch (error: unknown) {
     const duration = Date.now() - start;
     const errorType = error instanceof Error ? error.constructor.name : 'UnknownError';
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     // Record failed operation
     metrics.recordMetric('agent_operation', {
       ...metadata,
@@ -121,7 +135,7 @@ export async function withMetrics<T>(
       duration_ms: duration,
       timestamp: new Date().toISOString()
     });
-    
+
     // Record error
     metrics.recordMetric('agent_metrics', {
       ...metadata,
@@ -132,7 +146,7 @@ export async function withMetrics<T>(
       value: 1,
       timestamp: new Date().toISOString()
     });
-    
+
     throw error;
   }
 }
