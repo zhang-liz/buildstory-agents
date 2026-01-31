@@ -64,6 +64,9 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
+- **Required**: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The app will throw a clear error at startup if either Supabase variable is missing.
+- **Optional**: `OPENAI_MODEL` — OpenAI chat model for content generation (default: `gpt-4o`). Set to e.g. `gpt-4-turbo` if you prefer.
+
 The app expects these variables in both the Next.js runtime and the Supabase maintenance scripts (`node update_schema.js`). No example file is shipped, so copy the snippet above directly.
 
 ### 5. Run Development Server
@@ -193,7 +196,7 @@ The system collects detailed metrics to monitor agent performance and optimize c
 ### Accessing Metrics
 
 ```typescript
-import { metrics } from './lib/metrics';
+import { metrics } from './lib/server/metrics';
 
 // Get all metrics
 const metricsData = metrics.getMetrics();
@@ -210,7 +213,7 @@ const errorCount = metricsData.metrics
 Wrap agent operations to automatically track metrics:
 
 ```typescript
-import { withMetrics } from './lib/metrics';
+import { withMetrics } from './lib/server/metrics';
 
 async function processRequest() {
   return withMetrics('MyAgent', 'processRequest', async () => {
@@ -276,7 +279,7 @@ The system uses carefully crafted prompts for different agents:
 - **Rewriter**: Optimizes individual sections for specific goals
 - **Brand Guardian**: Ensures consistency with brand guidelines
 
-All LLM calls target the `gpt-5` chat completions endpoint and require `OPENAI_API_KEY` to be present.
+All LLM calls use the model from `OPENAI_MODEL` (default: `gpt-4o`) and require `OPENAI_API_KEY` to be present.
 
 Prompts include persona targeting, tone enforcement, and structural constraints.
 
@@ -349,17 +352,22 @@ src/
 │   └── page.tsx          # Home page
 ├── components/           # UI components
 │   └── sections/         # Landing page sections
-├── lib/                  # Core utilities
-│   ├── agents/          # AI agents
+├── lib/                  # Shared (types, validation, client-safe)
 │   ├── storyboard.ts    # Types and validation
+│   ├── personas.ts      # Persona types and themes
+│   ├── tracking.ts      # Client-side event tracking
+│   └── utils.ts         # Shared utilities
+├── lib/server/           # Server-only (never import from client)
+│   ├── agents/          # AI agents
 │   ├── database.ts      # Database operations
 │   ├── bandit.ts        # Multi-armed bandit
-│   └── tracking.ts      # Event tracking
+│   ├── config.ts        # Env/config
+│   └── metrics.ts       # Agent metrics
 └── database/            # SQL schema
 ```
 
 ### Adding New Agents
-1. Create agent file in `lib/agents/`
+1. Create agent file in `lib/server/agents/`
 2. Implement the `propose(context, section)` interface
 3. Add to strategist workflow
 4. Update API endpoints as needed
