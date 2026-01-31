@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { metrics, withMetrics } from '../metrics';
+import { metrics, withMetrics } from '../server/metrics';
 
 describe('Agent Metrics', () => {
   beforeEach(() => {
@@ -24,15 +24,16 @@ describe('Agent Metrics', () => {
       // Verify operation was recorded
       const metricsData = metrics.getMetrics();
       const operations = Object.entries(metricsData.customMetrics)
-        .filter(([_, m]: [string, any]) => 
-          m.agent_type === 'test-agent' && 
-          m.operation === 'test-operation' && 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- customMetrics values are dynamic
+        .filter(([, m]: [string, any]) =>
+          m.agent_type === 'test-agent' &&
+          m.operation === 'test-operation' &&
           m.status === 'success'
         )
-        .map(([_, m]) => m);
-      
+        .map(([, m]) => m);
+
       expect(operations.length).toBeGreaterThan(0);
-      const operation = operations[0];
+      const operation = operations[0] as { duration_ms: number };
       expect(operation.duration_ms).toBeGreaterThanOrEqual(0);
     });
 
@@ -47,15 +48,16 @@ describe('Agent Metrics', () => {
       // Verify error was recorded
       const metricsData = metrics.getMetrics();
       const errors = Object.entries(metricsData.customMetrics)
-        .filter(([_, m]: [string, any]) => 
-          m.type === 'error' && 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- customMetrics values are dynamic
+        .filter(([, m]: [string, any]) =>
+          m.type === 'error' &&
           m.agent_type === 'test-agent' &&
           m.error_type === 'TestError'
         )
-        .map(([_, m]) => m);
-      
+        .map(([, m]) => m);
+
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors[0].operation).toBe('failing-operation');
+      expect((errors[0] as { operation: string }).operation).toBe('failing-operation');
     });
   });
 
@@ -85,16 +87,16 @@ describe('Agent Metrics', () => {
       // Verify latency was recorded
       const metricsData = metrics.getMetrics();
       const latencies = Object.entries(metricsData.customMetrics)
-        .filter(([_, m]: [string, any]) => 
-          m.type === 'latency' && 
-          m.agent_type === 'test-agent' && 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- customMetrics values are dynamic
+        .filter(([, m]: [string, any]) =>
+          m.type === 'latency' &&
+          m.agent_type === 'test-agent' &&
           m.operation === 'timed-operation'
         )
-        .map(([_, m]) => m);
-      
+        .map(([, m]) => m);
+
       expect(latencies.length).toBeGreaterThan(0);
-      // Should be around 10ms, but we'll just check that it's greater than 0
-      expect(latencies[0].value).toBeGreaterThan(0);
+      expect((latencies[0] as { value: number }).value).toBeGreaterThan(0);
       
       // Restore timers
       vi.useRealTimers();
@@ -115,11 +117,12 @@ describe('Agent Metrics', () => {
       // Verify both operations were tracked
       const metricsData = metrics.getMetrics();
       const operations = Object.entries(metricsData.customMetrics)
-        .filter(([_, m]: [string, any]) => 
-          m.agent_type === 'test-agent' && 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- customMetrics values are dynamic
+        .filter(([, m]: [string, any]) =>
+          m.agent_type === 'test-agent' &&
           (m.operation === 'op1' || m.operation === 'op2')
         )
-        .map(([_, m]) => m);
+        .map(([, m]) => m);
       
       // We expect at least 2 operations (one for each) and possibly more for latency
       expect(operations.length).toBeGreaterThanOrEqual(2);

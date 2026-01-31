@@ -93,7 +93,9 @@ describe('Storyboard', () => {
     it('should parse bullets section', () => {
       const result = parseSection(validBulletsSection);
       expect(result.type).toBe('bullets');
-      expect(result.items).toEqual(['Item 1', 'Item 2']);
+      if (result.type === 'bullets') {
+        expect(result.items).toEqual(['Item 1', 'Item 2']);
+      }
     });
 
     it('should reject section with unknown type', () => {

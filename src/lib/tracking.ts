@@ -7,7 +7,7 @@ export interface TrackingEvent {
   sectionKey: string;
   variantHash?: string;
   event: 'view' | 'dwell' | 'hover' | 'scrollDepth' | 'ctaClick' | 'pollPersona' | 'bounce' | 'conversion' | 'engagement';
-  meta?: Record<string, any>;
+  meta?: Record<string, unknown>;
 }
 
 // Track single event
@@ -160,7 +160,7 @@ export function trackEngagement(
   sectionKey: string,
   variantHash: string,
   engagementType: string,
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
 ): void {
   track({
     storyId,

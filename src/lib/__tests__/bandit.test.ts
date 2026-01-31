@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { updateBanditState, chooseVariant, initializeBanditArm, BanditState } from '../bandit';
-import { metrics } from '../metrics';
+import { updateBanditState, chooseVariant, initializeBanditArm, BanditState } from '../server/bandit';
+import { metrics } from '../server/metrics';
 
 describe('Bandit', () => {
   beforeEach(() => {
