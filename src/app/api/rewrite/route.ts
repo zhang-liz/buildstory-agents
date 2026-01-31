@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { parseSection, generateVariantHash } from '@/lib/storyboard';
-import { getStory, getLatestStoryboard, saveStoryboard, trackEvent } from '@/lib/database';
-import { generateSection, optimizeSection } from '@/lib/agents/section';
-import { validateBrandAlignment } from '@/lib/agents/brand';
-import { deployVariant } from '@/lib/agents/strategist';
-import { classifyPersona, extractPersonaContext } from '@/lib/agents/persona';
+import { getStory, getLatestStoryboard, saveStoryboard, trackEvent } from '@/lib/server/database';
+import { generateSection, optimizeSection } from '@/lib/server/agents/section';
+import { validateBrandAlignment } from '@/lib/server/agents/brand';
+import { deployVariant } from '@/lib/server/agents/strategist';
+import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
 
 // Rate limiting store (in production, use Redis)
 const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
@@ -202,7 +202,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Import here to avoid circular dependency
-    const { getSectionPerformance } = await import('@/lib/agents/strategist');
+    const { getSectionPerformance } = await import('@/lib/server/agents/strategist');
 
     const performance = await getSectionPerformance(storyId, sectionKey);
 

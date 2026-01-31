@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
-import { getStory, getLatestStoryboard } from '@/lib/database';
-import { classifyPersona, extractPersonaContext } from '@/lib/agents/persona';
-import { chooseOptimalVariant } from '@/lib/agents/strategist';
-import { generateSection } from '@/lib/agents/section';
+import { getStory, getLatestStoryboard } from '@/lib/server/database';
+import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
+import { chooseOptimalVariant } from '@/lib/server/agents/strategist';
+import { generateSection } from '@/lib/server/agents/section';
 import { StoryboardRenderer } from './StoryboardRenderer';
 import { Storyboard } from '@/lib/storyboard';
 import { WaterBottlePersona } from '@/lib/personas';

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {
-  const results: any = {};
+  const results: Record<string, unknown> = {};
 
   try {
     // 1. Test environment variables
@@ -29,8 +29,8 @@ export async function GET(request: NextRequest) {
       } else {
         results.database = { status: 'success', message: 'Connected to stories table' };
       }
-    } catch (dbError: any) {
-      results.database = { status: 'error', message: dbError.message };
+    } catch (dbError: unknown) {
+      results.database = { status: 'error', message: dbError instanceof Error ? dbError.message : String(dbError) };
     }
 
     // 3. Test OpenAI connection (simple)
@@ -47,13 +47,13 @@ export async function GET(request: NextRequest) {
         const errorText = await openaiResponse.text();
         results.openai = { status: 'error', message: `HTTP ${openaiResponse.status}: ${errorText}` };
       }
-    } catch (openaiError: any) {
-      results.openai = { status: 'error', message: openaiError.message };
+    } catch (openaiError: unknown) {
+      results.openai = { status: 'error', message: openaiError instanceof Error ? openaiError.message : String(openaiError) };
     }
 
     // 4. Test persona agent
     try {
-      const { extractPersonaContext, classifyPersona } = await import('@/lib/agents/persona');
+      const { extractPersonaContext, classifyPersona } = await import('@/lib/server/agents/persona');
       const mockRequest = new Request('http://localhost:3000');
       const personaContext = extractPersonaContext(mockRequest);
       const personaResult = await classifyPersona(personaContext);
@@ -63,8 +63,8 @@ export async function GET(request: NextRequest) {
         detected: personaResult.label,
         confidence: personaResult.confidence
       };
-    } catch (personaError: any) {
-      results.persona = { status: 'error', message: personaError.message };
+    } catch (personaError: unknown) {
+      results.persona = { status: 'error', message: personaError instanceof Error ? personaError.message : String(personaError) };
     }
 
     return NextResponse.json({
@@ -73,11 +73,11 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString()
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json({
       status: 'debug_failed',
-      error: error.message,
-      stack: error.stack
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
     }, { status: 500 });
   }
 }

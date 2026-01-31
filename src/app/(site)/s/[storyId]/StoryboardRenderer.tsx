@@ -95,10 +95,9 @@ export function StoryboardRenderer({
     trackHover(storyId, sectionKey, variantHash);
   };
 
-  // Render section based on type
+  // Render section based on type (section narrowed per case for correct typing)
   const renderSection = (section: Section, index: number) => {
-    const baseProps = {
-      section: section as any,
+    const common = {
       onHover: () => handleSectionHover(section.key),
       className: index % 2 === 1 ? 'bg-gray-50' : 'bg-white'
     };
@@ -107,35 +106,37 @@ export function StoryboardRenderer({
       case 'hero':
         return (
           <Hero
-            {...baseProps}
+            {...common}
+            section={section}
             persona={currentPersona}
             onCtaClick={(ctaIndex) =>
-              handleCtaClick(section.key, '', ctaIndex, (section as any).cta[ctaIndex]?.text || '')
+              handleCtaClick(section.key, '', ctaIndex, section.cta[ctaIndex]?.text ?? '')
             }
           />
         );
 
       case 'bullets':
-        return <Bullets {...baseProps} />;
+        return <Bullets {...common} section={section} />;
 
       case 'steps':
-        return <Steps {...baseProps} />;
+        return <Steps {...common} section={section} />;
 
       case 'quotes':
-        return <Quotes {...baseProps} />;
+        return <Quotes {...common} section={section} />;
 
       case 'tiers':
         return (
           <Tiers
-            {...baseProps}
+            {...common}
+            section={section}
             onCtaClick={(tierIndex) =>
-              handleCtaClick(section.key, '', tierIndex, section.tiers[tierIndex]?.cta || '')
+              handleCtaClick(section.key, '', tierIndex, section.tiers[tierIndex]?.cta ?? '')
             }
           />
         );
 
       case 'qna':
-        return <QnA {...baseProps} />;
+        return <QnA {...common} section={section} />;
 
       default:
         return null;

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { trackEvent } from '@/lib/database';
-import { recordConversion } from '@/lib/agents/strategist';
-import { classifyPersona, extractPersonaContext, validatePersonaPoll } from '@/lib/agents/persona';
+import { trackEvent } from '@/lib/server/database';
+import { recordConversion } from '@/lib/server/agents/strategist';
+import { classifyPersona, extractPersonaContext, validatePersonaPoll } from '@/lib/server/agents/persona';
 import { WaterBottlePersona } from '@/lib/personas';
 
 // Rate limiting store (in production, use Redis)
@@ -172,8 +172,8 @@ export async function GET(request: NextRequest) {
 
   try {
     // Import here to avoid circular dependency
-    const { getRecentEvents } = await import('@/lib/database');
-    const { analyzeConversionFunnel } = await import('@/lib/agents/data');
+    const { getRecentEvents } = await import('@/lib/server/database');
+    const { analyzeConversionFunnel } = await import('@/lib/server/agents/data');
 
     const events = await getRecentEvents(storyId, minutesBack);
     const funnel = analyzeConversionFunnel(events);

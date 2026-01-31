@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { parseStoryboard, generateVariantHash, Storyboard } from '@/lib/storyboard';
-import { createStory, saveStoryboard } from '@/lib/database';
-import { classifyPersona, extractPersonaContext } from '@/lib/agents/persona';
-import { validateBrandAlignment } from '@/lib/agents/brand';
+import { createStory, saveStoryboard } from '@/lib/server/database';
+import { getOpenAIModel } from '@/lib/server/config';
+import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
+import { validateBrandAlignment } from '@/lib/server/agents/brand';
 import { WaterBottlePersona, personaThemes } from '@/lib/personas';
 
 // Request schema
@@ -63,7 +64,7 @@ Generate complete water bottle storyboard JSON for ${persona} buyers.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: getOpenAIModel(),
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -294,10 +295,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const STORY_GET_PERSONAS: WaterBottlePersona[] = ['athlete', 'commuter', 'outdoor', 'family'];
+
 // GET method to retrieve existing story
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const storyId = searchParams.get('storyId');
+  const personaParam = searchParams.get('persona');
 
   if (!storyId) {
     return NextResponse.json(
@@ -307,7 +311,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { getStory, getLatestStoryboard } = await import('@/lib/database');
+    const { getStory, getLatestStoryboard } = await import('@/lib/server/database');
 
     const story = await getStory(storyId);
 
@@ -318,8 +322,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get latest storyboard for default persona
-    const storyboard = await getLatestStoryboard(storyId, 'commuter');
+    // Use requested persona if valid, otherwise fallback order
+    const personasToTry: WaterBottlePersona[] = personaParam && STORY_GET_PERSONAS.includes(personaParam as WaterBottlePersona)
+      ? [personaParam as WaterBottlePersona]
+      : ['commuter', 'athlete', 'outdoor', 'family'];
+
+    let storyboard = null;
+    for (const persona of personasToTry) {
+      storyboard = await getLatestStoryboard(storyId, persona);
+      if (storyboard) break;
+    }
 
     return NextResponse.json({
       story,
