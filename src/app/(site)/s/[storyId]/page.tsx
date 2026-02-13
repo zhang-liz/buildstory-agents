@@ -1,52 +1,14 @@
 import { notFound } from 'next/navigation';
 import { getStory, getLatestStoryboard } from '@/lib/server/database';
 import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
-import { chooseOptimalVariant } from '@/lib/server/agents/strategist';
-import { generateSection } from '@/lib/server/agents/section';
+import { assembleStoryboard } from '@/lib/server/assembleStoryboard';
 import { StoryboardRenderer } from './StoryboardRenderer';
-import { Storyboard } from '@/lib/storyboard';
 import { WaterBottlePersona } from '@/lib/personas';
 import { headers } from 'next/headers';
 
 interface PageProps {
   params: Promise<{ storyId: string }>;
   searchParams: Promise<{ persona?: string }>;
-}
-
-// Assemble storyboard with agent decisions
-async function assembleStoryboard(
-  storyId: string,
-  persona: WaterBottlePersona,
-  baseStoryboard: Storyboard
-): Promise<Storyboard> {
-  const assembledSections = [];
-
-  for (const section of baseStoryboard.sections) {
-    try {
-      // Get available variants for this section (for now, just use the existing one)
-      const availableVariants = [section];
-
-      // Let strategist choose optimal variant
-      const chosenVariant = await chooseOptimalVariant({
-        storyId,
-        persona,
-        sectionKey: section.key,
-        availableVariants
-      });
-
-      assembledSections.push(chosenVariant.section);
-    } catch (error) {
-      console.error(`Error assembling section ${section.key}:`, error);
-      // Fallback to original section
-      assembledSections.push(section);
-    }
-  }
-
-  return {
-    ...baseStoryboard,
-    persona,
-    sections: assembledSections
-  };
 }
 
 export default async function StoryPage({ params, searchParams }: PageProps) {
@@ -101,8 +63,8 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  // Assemble final storyboard with agent decisions
-  const finalStoryboard = await assembleStoryboard(
+  // Assemble final storyboard with agent decisions and variant hashes for tracking
+  const { storyboard: finalStoryboard, sectionVariantHashes } = await assembleStoryboard(
     storyId,
     personaResult.label,
     storyboard.json
@@ -112,6 +74,7 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
     <StoryboardRenderer
       storyboard={finalStoryboard}
       storyId={storyId}
+      sectionVariantHashes={sectionVariantHashes}
       persona={{
         detected: personaResult.label,
         confidence: personaResult.confidence,

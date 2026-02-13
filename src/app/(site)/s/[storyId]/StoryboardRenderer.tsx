@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Storyboard, Section } from '@/lib/storyboard';
+import { Storyboard, Section, SectionVariantHashes } from '@/lib/storyboard';
 import { WaterBottlePersona, personaThemes } from '@/lib/personas';
 import { PersonaBar } from '@/components/PersonaBar';
 import { SmartCTA } from '@/components/SmartCTA';
@@ -25,6 +25,8 @@ import {
 interface StoryboardRendererProps {
   storyboard: Storyboard;
   storyId: string;
+  /** Section key -> variant hash for bandit/tracking attribution (empty when storyboard loaded via API e.g. persona switch) */
+  sectionVariantHashes?: SectionVariantHashes;
   persona: {
     detected: WaterBottlePersona;
     confidence: number;
@@ -35,9 +37,11 @@ interface StoryboardRendererProps {
 export function StoryboardRenderer({
   storyboard: initialStoryboard,
   storyId,
+  sectionVariantHashes: initialSectionVariantHashes = {},
   persona: initialPersona
 }: StoryboardRendererProps) {
   const [storyboard, setStoryboard] = useState(initialStoryboard);
+  const [sectionVariantHashes, setSectionVariantHashes] = useState(initialSectionVariantHashes);
   const [currentPersona, setCurrentPersona] = useState(initialPersona.detected);
   const [personaConfidence, setPersonaConfidence] = useState(initialPersona.confidence);
   const [isLoading, setIsLoading] = useState(false);
@@ -71,6 +75,7 @@ export function StoryboardRenderer({
         const data = await response.json();
         if (data.storyboard) {
           setStoryboard(data.storyboard);
+          setSectionVariantHashes(data.sectionVariantHashes ?? {}); // API may not return hashes
           setCurrentPersona(newPersona);
           setPersonaConfidence(0.95); // High confidence for manual selection
         }
@@ -97,8 +102,9 @@ export function StoryboardRenderer({
 
   // Render section based on type (section narrowed per case for correct typing)
   const renderSection = (section: Section, index: number) => {
+    const variantHash = sectionVariantHashes[section.key] ?? '';
     const common = {
-      onHover: () => handleSectionHover(section.key),
+      onHover: () => handleSectionHover(section.key, variantHash || undefined),
       className: index % 2 === 1 ? 'bg-gray-50' : 'bg-white'
     };
 
@@ -110,7 +116,7 @@ export function StoryboardRenderer({
             section={section}
             persona={currentPersona}
             onCtaClick={(ctaIndex) =>
-              handleCtaClick(section.key, '', ctaIndex, section.cta[ctaIndex]?.text ?? '')
+              handleCtaClick(section.key, variantHash, ctaIndex, section.cta[ctaIndex]?.text ?? '')
             }
           />
         );
@@ -130,7 +136,7 @@ export function StoryboardRenderer({
             {...common}
             section={section}
             onCtaClick={(tierIndex) =>
-              handleCtaClick(section.key, '', tierIndex, section.tiers[tierIndex]?.cta ?? '')
+              handleCtaClick(section.key, variantHash, tierIndex, section.tiers[tierIndex]?.cta ?? '')
             }
           />
         );
@@ -214,7 +220,7 @@ export function StoryboardRenderer({
       {/* Smart CTA Dock */}
       <SmartCTA
         persona={currentPersona}
-        onCtaClick={() => handleCtaClick('smart-cta', '', 0, personaThemes[currentPersona].copy.cta)}
+        onCtaClick={() => handleCtaClick('smart-cta', sectionVariantHashes['hero'] ?? '', 0, personaThemes[currentPersona].copy.cta)}
       />
 
       {/* Footer with Metrics */}
