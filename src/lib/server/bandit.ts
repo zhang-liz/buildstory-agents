@@ -20,21 +20,41 @@ export type BanditState = {
   beta: number;
 };
 
-// Simple Beta distribution sampler using transformation method
+/**
+ * Sample from Gamma(shape, 1) for integer shape >= 1.
+ * Gamma(n, 1) = sum of n iid Exp(1) = -sum(ln(U_i)).
+ */
+function sampleGammaInteger(shape: number): number {
+  if (shape < 1) {
+    throw new Error('Shape must be >= 1');
+  }
+  const n = Math.floor(shape);
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    sum -= Math.log(Math.random());
+  }
+  return sum;
+}
+
+/**
+ * Sample from Beta(alpha, beta) using the property:
+ * If X ~ Gamma(alpha, 1) and Y ~ Gamma(beta, 1) then X/(X+Y) ~ Beta(alpha, beta).
+ * Uses integer-shape Gamma sampler (bandit alpha/beta are integers from DB).
+ */
 export function sampleBeta(alpha: number, beta: number): number {
   if (alpha <= 0 || beta <= 0) {
     throw new Error('Alpha and beta must be positive');
   }
 
-  // For simple case, use rejection sampling or approximation
-  // This is a simplified version - in production might want more robust sampler
-  const u = Math.random();
-  const v = Math.random();
+  const x = sampleGammaInteger(alpha);
+  const y = sampleGammaInteger(beta);
+  const total = x + y;
 
-  const x = Math.pow(u, 1 / alpha);
-  const y = Math.pow(v, 1 / beta);
+  if (total === 0) {
+    return 0.5; // fallback if both samples are 0 (extremely unlikely)
+  }
 
-  return x / (x + y);
+  return x / total;
 }
 
 // Thompson Sampling to choose best variant
