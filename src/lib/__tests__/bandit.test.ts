@@ -1,11 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { updateBanditState, chooseVariant, initializeBanditArm, BanditState } from '../server/bandit';
-import { metrics } from '../server/metrics';
+import { describe, it, expect, vi } from 'vitest';
+import { updateBanditState, chooseVariant, initializeBanditArm, sampleBeta, BanditState } from '../server/bandit';
 
 describe('Bandit', () => {
-  beforeEach(() => {
-    metrics.reset();
-  });
 
   describe('updateBanditState', () => {
     it('should update bandit state with success (reward = 1)', () => {
@@ -51,41 +47,69 @@ describe('Bandit', () => {
 
   describe('chooseVariant', () => {
     it('should choose the arm with highest sample value', async () => {
+      // sampleBeta uses Gamma(alpha)+Gamma(beta); with all U=0.5, -ln(0.5)≈0.693, so both arms get 0.5
       const mockRandom = vi.spyOn(Math, 'random').mockImplementation(() => 0.5);
-      
+
       const arms = [
         { arm: { storyId: 's1', section: 'hero', variant: 'v1' }, alpha: 1, beta: 1 },
         { arm: { storyId: 's1', section: 'hero', variant: 'v2' }, alpha: 2, beta: 2 },
       ];
 
       const selected = await chooseVariant(arms);
-      
-      // With our mock, the sample values will be deterministic
-      // sampleBeta(1,1) = 0.5 / (0.5 + 0.5) = 0.5
-      // sampleBeta(2,2) = 0.25 / (0.25 + 0.25) = 0.5
-      // First one will be selected due to array order
+
       expect(selected).toEqual(arms[0].arm);
-      
+
       mockRandom.mockRestore();
     });
 
     it('should prefer arms with higher conversion rates', async () => {
-      // Mock Math.random to control the sampleBeta results
+      // Beta(alpha,beta) sampler: X~Gamma(alpha), Y~Gamma(beta), return X/(X+Y).
+      // Arm1 (10,1): want high sample -> high X, low Y. Arm2 (1,10): want low sample -> low X, high Y.
+      // Small U => -ln(U) large. So: 10 small values for arm1's Gamma(10), 1 large for Gamma(1); then 1 large for arm2's Gamma(1), 10 small for Gamma(10).
+      const small = 0.01; // -ln(0.01) ~ 4.6
+      const large = 0.99; // -ln(0.99) ~ 0.01
       const mockRandom = vi.spyOn(Math, 'random')
-        .mockImplementationOnce(() => 0.9) // High sample for first arm
-        .mockImplementationOnce(() => 0.1); // Low sample for second arm
-      
+        .mockImplementationOnce(() => small) // 10x for Gamma(10) arm1
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => large) // 1x for Gamma(1) arm1 -> arm1 sample high
+        .mockImplementationOnce(() => large) // 1x for Gamma(1) arm2
+        .mockImplementationOnce(() => small) // 10x for Gamma(10) arm2
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small)
+        .mockImplementationOnce(() => small);
+
       const arms = [
-        { arm: { storyId: 's1', section: 'hero', variant: 'v1' }, alpha: 10, beta: 1 }, // High conversion rate
-        { arm: { storyId: 's1', section: 'hero', variant: 'v2' }, alpha: 1, beta: 10 }, // Low conversion rate
+        { arm: { storyId: 's1', section: 'hero', variant: 'v1' }, alpha: 10, beta: 1 },
+        { arm: { storyId: 's1', section: 'hero', variant: 'v2' }, alpha: 1, beta: 10 },
       ];
 
       const selected = await chooseVariant(arms);
-      
-      // Should select the first arm because it has higher sample value
+
       expect(selected).toEqual(arms[0].arm);
-      
+
       mockRandom.mockRestore();
+    });
+
+    it('sampleBeta returns value in (0, 1)', () => {
+      for (let i = 0; i < 50; i++) {
+        const s = sampleBeta(2, 2);
+        expect(s).toBeGreaterThan(0);
+        expect(s).toBeLessThan(1);
+      }
     });
   });
 
