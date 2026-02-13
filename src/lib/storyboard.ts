@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { WaterBottlePersona } from './personas';
 
+/** Section key -> variant hash for bandit/tracking attribution (used by client and server) */
+export type SectionVariantHashes = Record<string, string>;
+
 // Brand schema
 export const BrandSchema = z.object({
   name: z.string(),
