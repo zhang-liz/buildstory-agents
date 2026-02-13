@@ -1,5 +1,5 @@
 import 'server-only';
-import { Section, Brand } from '@/lib/storyboard';
+import { Section, Brand, parseSection } from '@/lib/storyboard';
 import { getOpenAIModel } from '../config';
 
 export interface BrandValidationResult {
@@ -287,16 +287,13 @@ Return ONLY the corrected JSON, maintaining the same structure and section type.
     const data = await response.json();
     const content = data.choices[0].message.content;
 
-    // Parse and validate corrected section
-    const correctedSection = JSON.parse(content);
+    const raw = JSON.parse(content);
 
-    // Basic validation to ensure structure is maintained
-    if (correctedSection.type !== section.type || correctedSection.key !== section.key) {
+    if (raw.type !== section.type || raw.key !== section.key) {
       throw new Error('Correction changed section structure');
     }
 
-    return correctedSection;
-
+    return parseSection(raw);
   } catch (error) {
     console.error('Error correcting brand issues:', error);
     throw error;
@@ -356,8 +353,7 @@ Return ONLY the JSON, no explanations.`;
     const data = await response.json();
     const content = data.choices[0].message.content;
 
-    return JSON.parse(content);
-
+    return parseSection(JSON.parse(content));
   } catch (error) {
     console.error('Error generating brand-compliant alternative:', error);
     return section; // Return original on error
