@@ -327,15 +327,36 @@ export async function GET(request: NextRequest) {
       ? [personaParam as WaterBottlePersona]
       : ['commuter', 'athlete', 'outdoor', 'family'];
 
-    let storyboard = null;
-    for (const persona of personasToTry) {
-      storyboard = await getLatestStoryboard(storyId, persona);
-      if (storyboard) break;
+    let storyboardRecord = null;
+    let resolvedPersona: WaterBottlePersona = personasToTry[0];
+    for (const p of personasToTry) {
+      storyboardRecord = await getLatestStoryboard(storyId, p);
+      if (storyboardRecord) {
+        resolvedPersona = p;
+        break;
+      }
     }
+
+    if (!storyboardRecord) {
+      return NextResponse.json({
+        story,
+        storyboard: null,
+        sectionVariantHashes: {}
+      });
+    }
+
+    // Assemble so client gets correct variant hashes for tracking
+    const { assembleStoryboard } = await import('@/lib/server/assembleStoryboard');
+    const { storyboard: assembledStoryboard, sectionVariantHashes } = await assembleStoryboard(
+      storyId,
+      resolvedPersona,
+      storyboardRecord.json
+    );
 
     return NextResponse.json({
       story,
-      storyboard: storyboard?.json
+      storyboard: assembledStoryboard,
+      sectionVariantHashes
     });
 
   } catch (error) {
