@@ -12,6 +12,7 @@ import {
   getBanditState,
   updateBanditState as saveBanditState,
   getAllBanditStates,
+  getBanditStatesForStory,
   getConversionEvents,
   trackEvent
 } from '../database';
@@ -149,14 +150,9 @@ export async function recordConversion(
   });
 }
 
-// Process timeout events to record no-conversion
+// Process timeout events to record no-conversion (all sections for the story)
 export async function processTimeouts(storyId: string, timeoutMinutes: number = 5): Promise<void> {
-  const cutoffTime = new Date(Date.now() - timeoutMinutes * 60 * 1000);
-
-  // This would typically be run as a background job
-  // For now, we'll record timeouts when explicitly called
-
-  const allStates = await getAllBanditStates(storyId, '');
+  const allStates = await getBanditStatesForStory(storyId);
 
   for (const state of allStates) {
     const conversions = await getConversionEvents(
@@ -166,7 +162,6 @@ export async function processTimeouts(storyId: string, timeoutMinutes: number = 
       timeoutMinutes
     );
 
-    // If no conversions in timeout window, record as no-conversion
     if (conversions === 0) {
       const updatedState = updateBanditState(state, 0);
       await saveBanditState(updatedState);
