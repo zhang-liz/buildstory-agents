@@ -117,6 +117,22 @@ export async function getLatestStoryboard(storyId: string, persona: WaterBottleP
   return data;
 }
 
+/** Get all storyboard versions for a story + persona (for multi-variant bandit). */
+export async function getAllStoryboardsForPersona(
+  storyId: string,
+  persona: WaterBottlePersona
+): Promise<StoryboardRecord[]> {
+  const { data, error } = await supabase
+    .from('storyboards')
+    .select('*')
+    .eq('story_id', storyId)
+    .eq('persona', persona)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(`Failed to get storyboards: ${error.message}`);
+  return data || [];
+}
+
 // Bandit state operations
 export async function getBanditState(
   storyId: string,
@@ -175,6 +191,24 @@ export async function getAllBanditStates(storyId: string, sectionKey: string): P
   if (error) throw new Error(`Failed to get bandit states: ${error.message}`);
 
   // Convert snake_case to camelCase
+  return (data || []).map(item => ({
+    storyId: item.story_id,
+    sectionKey: item.section_key,
+    variantHash: item.variant_hash,
+    alpha: item.alpha,
+    beta: item.beta
+  }));
+}
+
+/** Get all bandit states for a story (all sections). Used by processTimeouts. */
+export async function getBanditStatesForStory(storyId: string): Promise<BanditState[]> {
+  const { data, error } = await supabase
+    .from('bandit_state')
+    .select('*')
+    .eq('story_id', storyId);
+
+  if (error) throw new Error(`Failed to get bandit states for story: ${error.message}`);
+
   return (data || []).map(item => ({
     storyId: item.story_id,
     sectionKey: item.section_key,
