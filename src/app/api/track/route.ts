@@ -4,9 +4,7 @@ import { trackEvent } from '@/lib/server/database';
 import { recordConversion } from '@/lib/server/agents/strategist';
 import { classifyPersona, extractPersonaContext, validatePersonaPoll } from '@/lib/server/agents/persona';
 import { WaterBottlePersona } from '@/lib/personas';
-
-// Rate limiting store (in production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+import { checkRateLimit } from '@/lib/server/rateLimit';
 
 // Event schema
 const EventSchema = z.object({
@@ -24,27 +22,6 @@ const EventSchema = z.object({
 const BatchEventsSchema = z.object({
   events: z.array(EventSchema).max(10) // Limit batch size
 });
-
-// Rate limiting function
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const windowMs = 60 * 1000; // 1 minute
-  const maxRequests = 100; // More generous for tracking
-
-  const current = rateLimitStore.get(ip);
-
-  if (!current || now > current.resetTime) {
-    rateLimitStore.set(ip, { count: 1, resetTime: now + windowMs });
-    return true;
-  }
-
-  if (current.count >= maxRequests) {
-    return false;
-  }
-
-  current.count++;
-  return true;
-}
 
 // Process individual event
 async function processEvent(
@@ -84,9 +61,13 @@ async function processEvent(
 // Single event tracking
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    if (!checkRateLimit(ip)) {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(ip, {
+      prefix: 'track',
+      windowMs: 60 * 1000,
+      maxRequests: 100
+    });
+    if (!allowed) {
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
         { status: 429 }
@@ -208,9 +189,13 @@ export async function GET(request: NextRequest) {
 // Beacon tracking (for navigator.sendBeacon)
 export async function PUT(request: NextRequest) {
   try {
-    // Rate limiting
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
-    if (!checkRateLimit(ip)) {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(ip, {
+      prefix: 'track',
+      windowMs: 60 * 1000,
+      maxRequests: 100
+    });
+    if (!allowed) {
       // For beacon, fail silently
       return new Response('', { status: 204 });
     }
