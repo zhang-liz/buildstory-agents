@@ -64,8 +64,9 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
 
-- **Required**: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The app will throw a clear error at startup if either Supabase variable is missing.
+- **Required**: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The app throws a clear error at startup if Supabase vars are missing, and on first LLM use if `OPENAI_API_KEY` is missing.
 - **Optional**: `OPENAI_MODEL` — OpenAI chat model for content generation (default: `gpt-4o`). Set to e.g. `gpt-4-turbo` if you prefer.
+- **Optional (rate limiting)**: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` — when set, rewrite and track APIs use Redis for rate limits across instances; otherwise in-memory limits are used.
 
 The app expects these variables in both the Next.js runtime and the Supabase maintenance scripts (`node update_schema.js`). No example file is shipped, so copy the snippet above directly.
 
