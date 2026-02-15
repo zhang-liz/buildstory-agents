@@ -17,35 +17,35 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
     searchParams,
   ]);
 
-  // Get story
-  const story = await getStory(storyId);
+  // Load story and classify persona in parallel (independent work)
+  const [story, personaResult] = await Promise.all([
+    getStory(storyId),
+    (async () => {
+      const headersList = await headers();
+      const headersObject: Record<string, string> = {};
+      for (const [key, value] of headersList.entries()) {
+        headersObject[key] = value;
+      }
+      const mockRequest = new Request("http://localhost", {
+        headers: headersObject,
+      });
+      const personaContext = extractPersonaContext(mockRequest);
+      if (
+        resolvedSearchParams.persona &&
+        ["athlete", "commuter", "outdoor", "family"].includes(
+          resolvedSearchParams.persona
+        )
+      ) {
+        personaContext.pollResult =
+          resolvedSearchParams.persona as WaterBottlePersona;
+      }
+      return classifyPersona(personaContext);
+    })(),
+  ]);
+
   if (!story) {
     notFound();
   }
-
-  // Extract persona context from request headers
-  const headersList = await headers();
-  const headersObject: Record<string, string> = {};
-  for (const [key, value] of headersList.entries()) {
-    headersObject[key] = value;
-  }
-  const mockRequest = new Request("http://localhost", {
-    headers: headersObject,
-  });
-  const personaContext = extractPersonaContext(mockRequest);
-
-  // Override persona if specified in search params
-  if (
-    resolvedSearchParams.persona &&
-    ["athlete", "commuter", "outdoor", "family"].includes(
-      resolvedSearchParams.persona
-    )
-  ) {
-    personaContext.pollResult =
-      resolvedSearchParams.persona as WaterBottlePersona;
-  }
-
-  const personaResult = await classifyPersona(personaContext);
 
   // Get latest storyboard for this persona
   let storyboard = await getLatestStoryboard(storyId, personaResult.label);
