@@ -119,7 +119,10 @@ export async function getLatestStoryboard(storyId: string, persona: WaterBottleP
   return data;
 }
 
-/** Get all storyboard versions for a story + persona (for multi-variant bandit). */
+/** Max storyboard versions loaded per persona (bandit variants). Keeps memory and latency bounded. */
+const STORYBOARD_HISTORY_LIMIT = 50;
+
+/** Get recent storyboard versions for a story + persona (for multi-variant bandit). */
 export async function getAllStoryboardsForPersona(
   storyId: string,
   persona: WaterBottlePersona
@@ -129,7 +132,8 @@ export async function getAllStoryboardsForPersona(
     .select('*')
     .eq('story_id', storyId)
     .eq('persona', persona)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(STORYBOARD_HISTORY_LIMIT);
 
   if (error) throw new Error(`Failed to get storyboards: ${error.message}`);
   return data || [];
