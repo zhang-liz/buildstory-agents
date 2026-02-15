@@ -7,26 +7,30 @@ import { WaterBottlePersona } from '@/lib/personas';
 /**
  * Collect unique section variants for a section key from all storyboard versions.
  * Dedupes by variant hash so the bandit sees one entry per distinct variant.
+ * Hashes all candidate sections in parallel.
  */
 async function getSectionVariants(
   sectionKey: string,
   allStoryboards: { json: Storyboard }[],
   baseSection: Section
 ): Promise<Section[]> {
-  const seen = new Set<string>();
-  const variants: Section[] = [baseSection];
-
-  const baseHash = await generateVariantHash(baseSection);
-  seen.add(baseHash);
-
+  const sectionsToHash: Section[] = [baseSection];
   for (const record of allStoryboards) {
-    const section = record.json.sections.find(s => s.key === sectionKey);
-    if (!section) continue;
+    const section = record.json.sections.find((s) => s.key === sectionKey);
+    if (section) sectionsToHash.push(section);
+  }
 
-    const hash = await generateVariantHash(section);
+  const hashes = await Promise.all(
+    sectionsToHash.map((s) => generateVariantHash(s))
+  );
+
+  const seen = new Set<string>();
+  const variants: Section[] = [];
+  for (let i = 0; i < sectionsToHash.length; i++) {
+    const hash = hashes[i];
     if (seen.has(hash)) continue;
     seen.add(hash);
-    variants.push(section);
+    variants.push(sectionsToHash[i]);
   }
 
   return variants;
