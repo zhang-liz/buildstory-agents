@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { BanditState } from './bandit';
 import { Storyboard } from '@/lib/storyboard';
@@ -64,7 +65,8 @@ export async function createStory(brief: string, brand: Record<string, unknown>)
   return data;
 }
 
-export async function getStory(id: string): Promise<Story | null> {
+/** Cached per request so page and generateMetadata share one fetch. */
+export const getStory = cache(async (id: string): Promise<Story | null> => {
   const { data, error } = await supabase
     .from('stories')
     .select('*')
@@ -76,7 +78,7 @@ export async function getStory(id: string): Promise<Story | null> {
     throw new Error(`Failed to get story: ${error.message}`);
   }
   return data;
-}
+});
 
 // Storyboard operations
 export async function saveStoryboard(
