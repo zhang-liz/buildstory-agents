@@ -56,24 +56,35 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
     };
   }
 
-  // Get bandit states for all variants
-  const banditArms: BanditArm[] = [];
+  // Hash all variants and fetch all bandit states in parallel
+  const variantHashes = await Promise.all(
+    availableVariants.map((v) => generateVariantHash(v))
+  );
 
-  for (const variant of availableVariants) {
-    const variantHash = await generateVariantHash(variant);
-    let banditState = await getBanditState(storyId, sectionKey, variantHash);
+  const banditStates = await Promise.all(
+    variantHashes.map((variantHash) =>
+      getBanditState(storyId, sectionKey, variantHash)
+    )
+  );
 
-    if (!banditState) {
-      banditState = initializeBanditArm(storyId, sectionKey, variantHash);
-      await saveBanditState(banditState);
-    }
+  // Ensure bandit state exists for any missing (parallel), then build arms in order
+  const resolvedStates = await Promise.all(
+    banditStates.map(async (banditState, i) => {
+      const variantHash = variantHashes[i];
+      let state = banditState;
+      if (!state) {
+        state = initializeBanditArm(storyId, sectionKey, variantHash);
+        await saveBanditState(state);
+      }
+      return { variantHash, state };
+    })
+  );
 
-    banditArms.push({
-      arm: { storyId, section: sectionKey, variant: variantHash },
-      alpha: banditState.alpha,
-      beta: banditState.beta
-    });
-  }
+  const banditArms: BanditArm[] = resolvedStates.map(({ variantHash, state }) => ({
+    arm: { storyId, section: sectionKey, variant: variantHash },
+    alpha: state.alpha,
+    beta: state.beta
+  }));
 
   // Use Thompson Sampling to choose variant
   const chosenArm = await chooseVariant(banditArms);
