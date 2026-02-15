@@ -35,6 +35,7 @@ async function getSectionVariants(
 /**
  * Assembles a storyboard by running the strategist (Thompson sampling) per section.
  * Uses all saved storyboard versions to get multiple variants per section when available.
+ * Sections are processed in parallel for lower latency.
  * Returns the final storyboard plus section -> variant hash for client tracking.
  */
 export async function assembleStoryboard(
@@ -42,32 +43,40 @@ export async function assembleStoryboard(
   persona: WaterBottlePersona,
   baseStoryboard: Storyboard
 ): Promise<{ storyboard: Storyboard; sectionVariantHashes: SectionVariantHashes }> {
-  const assembledSections = [];
-  const sectionVariantHashes: SectionVariantHashes = {};
-
   const allStoryboards = await getAllStoryboardsForPersona(storyId, persona);
 
-  for (const section of baseStoryboard.sections) {
-    try {
-      const availableVariants = await getSectionVariants(
-        section.key,
-        allStoryboards,
-        section
-      );
+  const results = await Promise.all(
+    baseStoryboard.sections.map(async (section) => {
+      try {
+        const availableVariants = await getSectionVariants(
+          section.key,
+          allStoryboards,
+          section
+        );
 
-      const chosenVariant = await chooseOptimalVariant({
-        storyId,
-        persona,
-        sectionKey: section.key,
-        availableVariants
-      });
+        const chosenVariant = await chooseOptimalVariant({
+          storyId,
+          persona,
+          sectionKey: section.key,
+          availableVariants
+        });
 
-      assembledSections.push(chosenVariant.section);
-      sectionVariantHashes[section.key] = chosenVariant.variantHash;
-    } catch (error) {
-      console.error(`Error assembling section ${section.key}:`, error);
-      assembledSections.push(section);
-    }
+        return {
+          key: section.key,
+          section: chosenVariant.section,
+          variantHash: chosenVariant.variantHash
+        };
+      } catch (error) {
+        console.error(`Error assembling section ${section.key}:`, error);
+        return { key: section.key, section, variantHash: '' };
+      }
+    })
+  );
+
+  const assembledSections = results.map((r) => r.section);
+  const sectionVariantHashes: SectionVariantHashes = {};
+  for (const r of results) {
+    if (r.variantHash) sectionVariantHashes[r.key] = r.variantHash;
   }
 
   const storyboard: Storyboard = {
