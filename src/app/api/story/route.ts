@@ -5,6 +5,7 @@ import { createStory, saveStoryboard } from '@/lib/server/database';
 import { getOpenAIModel } from '@/lib/server/config';
 import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
 import { validateBrandAlignment } from '@/lib/server/agents/brand';
+import { checkRateLimit } from '@/lib/server/rateLimit';
 import { WaterBottlePersona, personaThemes } from '@/lib/personas';
 
 // Request schema
@@ -208,6 +209,19 @@ function getWaterBottleTemplateStoryboard(
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const allowed = await checkRateLimit(ip, {
+      prefix: 'story',
+      windowMs: 60 * 60 * 1000, // 1 hour
+      maxRequests: 10
+    });
+    if (!allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. You can create up to 10 stories per hour. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
     // Parse and validate request
     const body = await request.json();
     const { brief, tone, palette, brandName } = StoryRequestSchema.parse(body);
