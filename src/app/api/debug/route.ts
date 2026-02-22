@@ -1,16 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { openaiCheckConnection } from '@/lib/server/openai';
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return new NextResponse(null, { status: 404 });
+  }
+
   const results: Record<string, unknown> = {};
 
   try {
-    // 1. Test environment variables
+    // 1. Test environment variables (never expose key or key prefix)
     results.env = {
       openai: !!process.env.OPENAI_API_KEY,
       supabase_url: !!process.env.SUPABASE_URL,
       supabase_key: !!process.env.SUPABASE_ANON_KEY,
-      openai_key_prefix: process.env.OPENAI_API_KEY?.substring(0, 10) + '...'
     };
 
     // 2. Test Supabase connection
@@ -33,20 +37,12 @@ export async function GET(request: NextRequest) {
       results.database = { status: 'error', message: dbError instanceof Error ? dbError.message : String(dbError) };
     }
 
-    // 3. Test OpenAI connection (simple)
+    // 3. Test OpenAI connection (via shared helper; no key in this file)
     try {
-      const openaiResponse = await fetch('https://api.openai.com/v1/models', {
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        }
-      });
-
-      if (openaiResponse.ok) {
-        results.openai = { status: 'success', message: 'API key valid' };
-      } else {
-        const errorText = await openaiResponse.text();
-        results.openai = { status: 'error', message: `HTTP ${openaiResponse.status}: ${errorText}` };
-      }
+      const openaiResult = await openaiCheckConnection();
+      results.openai = openaiResult.ok
+        ? { status: 'success', message: openaiResult.message }
+        : { status: 'error', message: openaiResult.message };
     } catch (openaiError: unknown) {
       results.openai = { status: 'error', message: openaiError instanceof Error ? openaiError.message : String(openaiError) };
     }
@@ -74,10 +70,13 @@ export async function GET(request: NextRequest) {
     });
 
   } catch (error: unknown) {
-    return NextResponse.json({
+    const payload: Record<string, unknown> = {
       status: 'debug_failed',
       error: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
-    }, { status: 500 });
+    };
+    if ((process.env.NODE_ENV as string) !== 'production' && error instanceof Error && error.stack) {
+      payload.stack = error.stack;
+    }
+    return NextResponse.json(payload, { status: 500 });
   }
 }
