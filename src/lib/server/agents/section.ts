@@ -1,7 +1,7 @@
 import 'server-only';
 import { Section, parseSection } from '@/lib/storyboard';
 import { WaterBottlePersona } from '@/lib/personas';
-import { getOpenAIModel } from '../config';
+import { openaiChat } from '../openai';
 import { getSectionPerformance } from './strategist';
 
 export interface SectionContext {
@@ -29,30 +29,14 @@ export async function generateSection(
   const userPrompt = getUserPrompt(sectionKey, persona, brief, brand, existingSection, goal);
 
   try {
-    // Call LLM API (OpenAI compatible)
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: getOpenAIModel(),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 1000,
-      }),
+    const content = await openaiChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 1000,
     });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
 
     // Parse JSON response
     const sectionJson = JSON.parse(content);

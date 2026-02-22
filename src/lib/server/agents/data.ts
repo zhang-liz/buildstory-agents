@@ -1,7 +1,7 @@
 import 'server-only';
 import { QuotesSection } from '@/lib/storyboard';
 import { WaterBottlePersona } from '@/lib/personas';
-import { getOpenAIModel } from '../config';
+import { openaiChat } from '../openai';
 import { getRecentEvents, Event } from '../database';
 
 export interface ProofInsight {
@@ -142,29 +142,14 @@ ${insights.map(i => `- ${i.metric}: ${i.value} (${i.timeframe})`).join('\n')}
 Generate testimonials for ${persona} persona.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: getOpenAIModel(),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 400,
-      }),
+    const content = await openaiChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.7,
+      max_tokens: 400,
     });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
     const quotes = JSON.parse(content);
 
     return (quotes as Array<{ text: string; role: string }>).map((quote) => ({

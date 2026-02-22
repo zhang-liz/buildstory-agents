@@ -1,6 +1,6 @@
 import 'server-only';
 import { Section, Brand, parseSection } from '@/lib/storyboard';
-import { getOpenAIModel } from '../config';
+import { openaiChat } from '../openai';
 
 export interface BrandValidationResult {
   isValid: boolean;
@@ -263,29 +263,14 @@ Return ONLY the corrected JSON, maintaining the same structure and section type.
   const userPrompt = `Fix this section:\n${JSON.stringify(section, null, 2)}`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: getOpenAIModel(),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.3, // Lower temperature for consistency
-        max_tokens: 800,
-      }),
+    const content = await openaiChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_tokens: 800,
     });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
 
     const raw = JSON.parse(content);
 
@@ -329,29 +314,14 @@ Return ONLY the JSON, no explanations.`;
   const userPrompt = `Rewrite this section for better brand alignment:\n${JSON.stringify(section, null, 2)}`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: getOpenAIModel(),
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.5,
-        max_tokens: 800,
-      }),
+    const content = await openaiChat({
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      temperature: 0.5,
+      max_tokens: 800,
     });
-
-    if (!response.ok) {
-      throw new Error(`LLM API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const content = data.choices[0].message.content;
 
     return parseSection(JSON.parse(content));
   } catch (error) {
