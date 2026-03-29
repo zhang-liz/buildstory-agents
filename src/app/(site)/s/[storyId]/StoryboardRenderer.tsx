@@ -47,7 +47,7 @@ export function StoryboardRenderer({
   const [isLoading, setIsLoading] = useState(false);
 
   // Tracking hooks
-  const dwellTimeRef = useRef<() => void>();
+  const dwellTimeRef = useRef<(() => void) | undefined>(undefined);
 
   useEffect(() => {
     // Initialize tracking
