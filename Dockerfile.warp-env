@@ -1,0 +1,15 @@
+FROM warpdotdev/dev-base:latest-agents
+
+SHELL ["/bin/bash", "-lc"]
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL https://bun.sh/install | bash -s -- bun-v1.3.8 \
+ && ln -sf /root/.bun/bin/bun /usr/local/bin/bun \
+ && ln -sf /root/.bun/bin/bunx /usr/local/bin/bunx
+
+ENV BUN_INSTALL=/root/.bun
+ENV PATH="/root/.bun/bin:${PATH}"
