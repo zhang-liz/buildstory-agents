@@ -1,5 +1,11 @@
+const path = require("node:path");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Pin monorepo/workspace root so Turbopack does not pick a parent folder's lockfile.
+  turbopack: {
+    root: path.join(__dirname),
+  },
   allowedDevOrigins: ["*.preview.same-app.com"],
   images: {
     unoptimized: true,
