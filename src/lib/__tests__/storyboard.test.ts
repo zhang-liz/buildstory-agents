@@ -68,14 +68,24 @@ describe('Storyboard', () => {
       expect(() => parseStoryboard(json)).toThrow();
     });
 
-    it('should reject invalid persona', () => {
+    it('should reject empty persona string', () => {
       const json = {
         version: 1,
         brand: { name: 'X', tone: 'x', palette: [], logoAlt: 'x' },
-        persona: 'invalid',
+        persona: '',
         sections: [],
       };
       expect(() => parseStoryboard(json)).toThrow();
+    });
+
+    it('should accept any non-empty persona string', () => {
+      const json = {
+        version: 1,
+        brand: { name: 'X', tone: 'x', palette: [], logoAlt: 'x' },
+        persona: 'saas-developer',
+        sections: [],
+      };
+      expect(() => parseStoryboard(json)).not.toThrow();
     });
   });
 

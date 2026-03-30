@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS stories (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     brief TEXT NOT NULL,
     brand JSONB NOT NULL DEFAULT '{}',
+    vertical TEXT NOT NULL DEFAULT 'general',
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -16,7 +17,7 @@ CREATE TABLE IF NOT EXISTS stories (
 CREATE TABLE IF NOT EXISTS storyboards (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
-    persona TEXT NOT NULL CHECK (persona IN ('athlete', 'commuter', 'outdoor', 'family')),
+    persona TEXT NOT NULL,
     variant_hash TEXT NOT NULL,
     json JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -37,7 +38,7 @@ CREATE TABLE IF NOT EXISTS bandit_state (
 CREATE TABLE IF NOT EXISTS events (
     id BIGSERIAL PRIMARY KEY,
     story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
-    persona TEXT CHECK (persona IN ('athlete', 'commuter', 'outdoor', 'family')),
+    persona TEXT,
     section_key TEXT,
     variant_hash TEXT,
     event TEXT NOT NULL,
@@ -81,6 +82,65 @@ CREATE POLICY "Allow all operations on storyboards" ON storyboards FOR ALL USING
 CREATE POLICY "Allow all operations on bandit_state" ON bandit_state FOR ALL USING (true);
 CREATE POLICY "Allow all operations on events" ON events FOR ALL USING (true);
 
+
+-- Experiments table - tracks automated and manual A/B test cycles
+CREATE TABLE IF NOT EXISTS experiments (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    story_id UUID REFERENCES stories(id) ON DELETE CASCADE,
+    section_key TEXT NOT NULL,
+    persona TEXT NOT NULL,
+    control_variant_hash TEXT NOT NULL,
+    baseline_conversion_rate NUMERIC(5,4) DEFAULT 0,
+    best_conversion_rate NUMERIC(5,4) DEFAULT 0,
+    lift_pct NUMERIC(6,2) DEFAULT 0,
+    variants_tested INTEGER DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'concluded', 'cancelled')),
+    source TEXT NOT NULL DEFAULT 'automated' CHECK (source IN ('automated', 'manual')),
+    started_at TIMESTAMPTZ DEFAULT NOW(),
+    concluded_at TIMESTAMPTZ,
+    meta JSONB DEFAULT '{}'
+);
+
+CREATE INDEX IF NOT EXISTS idx_experiments_story ON experiments(story_id);
+CREATE INDEX IF NOT EXISTS idx_experiments_status ON experiments(status);
+
+-- Persona definitions table - data-driven persona engine
+CREATE TABLE IF NOT EXISTS persona_definitions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    vertical TEXT NOT NULL,
+    slug TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    description TEXT,
+    scoring_rules JSONB NOT NULL DEFAULT '{}',
+    tone TEXT NOT NULL DEFAULT 'professional',
+    default_palette JSONB DEFAULT '["#059669"]',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_persona_defs_vertical ON persona_definitions(vertical);
+CREATE INDEX IF NOT EXISTS idx_persona_defs_slug ON persona_definitions(slug);
+
+-- Vertical templates table - per-industry section defaults
+CREATE TABLE IF NOT EXISTS vertical_templates (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    vertical TEXT NOT NULL,
+    section_key TEXT NOT NULL,
+    template JSONB NOT NULL,
+    brand_defaults JSONB DEFAULT '{}',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(vertical, section_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vertical_templates ON vertical_templates(vertical);
+
+-- RLS for new tables
+ALTER TABLE experiments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE persona_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vertical_templates ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all operations on experiments" ON experiments FOR ALL USING (true);
+CREATE POLICY "Allow all operations on persona_definitions" ON persona_definitions FOR ALL USING (true);
+CREATE POLICY "Allow all operations on vertical_templates" ON vertical_templates FOR ALL USING (true);
 
 -- View for analytics (helpful for debugging)
 CREATE OR REPLACE VIEW event_analytics AS

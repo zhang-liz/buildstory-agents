@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { WaterBottlePersona } from './personas';
 
 /** Section key -> variant hash for bandit/tracking attribution (used by client and server) */
 export type SectionVariantHashes = Record<string, string>;
@@ -9,7 +8,7 @@ export const BrandSchema = z.object({
   name: z.string(),
   tone: z.string(),
   palette: z.array(z.string()),
-  logoAlt: z.string()
+  logoAlt: z.string(),
 });
 
 // CTA schema
@@ -87,15 +86,18 @@ export const SectionSchema = z.discriminatedUnion('type', [
   QnASectionSchema
 ]);
 
-// Water bottle persona enum
-export const PersonaEnum = z.enum(['athlete', 'commuter', 'outdoor', 'family']);
+/**
+ * Persona identifier. Accepts any non-empty string so the system can
+ * support data-driven personas beyond the original 4 water-bottle types.
+ * Legacy enum values (athlete, commuter, outdoor, family) still validate.
+ */
+export const PersonaEnum = z.string().min(1);
 
-// Main Storyboard schema with water bottle personas
 export const StoryboardSchema = z.object({
   version: z.literal(1),
   brand: BrandSchema,
   persona: PersonaEnum,
-  sections: z.array(SectionSchema)
+  sections: z.array(SectionSchema),
 });
 
 // TypeScript types

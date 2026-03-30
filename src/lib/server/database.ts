@@ -3,7 +3,6 @@ import { cache } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { BanditState } from './bandit';
 import { Storyboard } from '@/lib/storyboard';
-import { WaterBottlePersona } from '@/lib/personas';
 
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
@@ -28,7 +27,7 @@ export interface Story {
 export interface StoryboardRecord {
   id: string;
   story_id: string;
-  persona: WaterBottlePersona;
+  persona: string;
   variant_hash: string;
   json: Storyboard;
   created_at: string;
@@ -45,7 +44,7 @@ export interface BanditStateRecord {
 export interface Event {
   id: number;
   story_id: string;
-  persona: WaterBottlePersona;
+  persona: string;
   section_key: string;
   variant_hash: string;
   event: string;
@@ -54,10 +53,14 @@ export interface Event {
 }
 
 // Story operations
-export async function createStory(brief: string, brand: Record<string, unknown>): Promise<Story> {
+export async function createStory(
+  brief: string,
+  brand: Record<string, unknown>,
+  vertical: string = 'general'
+): Promise<Story> {
   const { data, error } = await supabase
     .from('stories')
-    .insert([{ brief, brand }])
+    .insert([{ brief, brand, vertical }])
     .select()
     .single();
 
@@ -83,7 +86,7 @@ export const getStory = cache(async (id: string): Promise<Story | null> => {
 // Storyboard operations
 export async function saveStoryboard(
   storyId: string,
-  persona: WaterBottlePersona,
+  persona: string,
   variantHash: string,
   storyboard: Storyboard
 ): Promise<StoryboardRecord> {
@@ -102,7 +105,7 @@ export async function saveStoryboard(
   return data;
 }
 
-export async function getLatestStoryboard(storyId: string, persona: WaterBottlePersona): Promise<StoryboardRecord | null> {
+export async function getLatestStoryboard(storyId: string, persona: string): Promise<StoryboardRecord | null> {
   const { data, error } = await supabase
     .from('storyboards')
     .select('*')
@@ -125,7 +128,7 @@ const STORYBOARD_HISTORY_LIMIT = 50;
 /** Get recent storyboard versions for a story + persona (for multi-variant bandit). */
 export async function getAllStoryboardsForPersona(
   storyId: string,
-  persona: WaterBottlePersona
+  persona: string
 ): Promise<StoryboardRecord[]> {
   const { data, error } = await supabase
     .from('storyboards')
@@ -227,7 +230,7 @@ export async function getBanditStatesForStory(storyId: string): Promise<BanditSt
 // Event operations
 export async function trackEvent(
   storyId: string,
-  persona: WaterBottlePersona,
+  persona: string,
   sectionKey: string,
   variantHash: string,
   event: string,
@@ -279,7 +282,7 @@ export async function getConversionEvents(
     .eq('section_key', sectionKey)
     .eq('variant_hash', variantHash)
     .gte('ts', cutoff)
-    .in('event', ['ctaClick']);
+    .in('event', ['ctaClick', 'conversion', 'scrollDepth', 'dwell', 'engagement']);
 
   if (error) throw new Error(`Failed to get conversion events: ${error.message}`);
   return data?.length || 0;
