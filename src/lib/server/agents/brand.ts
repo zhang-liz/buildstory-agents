@@ -1,17 +1,13 @@
 import 'server-only';
 import { Section, Brand, parseSection } from '@/lib/storyboard';
+import { BrandValidationInputSchema, BrandValidationResultSchema } from './contracts';
+import type { BrandValidationResult } from './contracts';
 import { openaiChat } from '../openai';
+import { withMetrics } from '../metrics';
 
-export interface BrandValidationResult {
-  isValid: boolean;
-  score: number; // 0-1 score for brand alignment
-  issues: string[];
-  suggestions: string[];
-  correctedSection?: Section;
-}
+export type { BrandValidationResult };
 
-// Main brand validation function
-export async function validateBrandAlignment(
+async function _validateBrandAlignment(
   section: Section,
   brand: Brand
 ): Promise<BrandValidationResult> {
@@ -19,19 +15,16 @@ export async function validateBrandAlignment(
   const suggestions: string[] = [];
   let score = 1.0;
 
-  // Tone validation
   const toneResult = validateTone(section, brand.tone);
   score *= toneResult.score;
   issues.push(...toneResult.issues);
   suggestions.push(...toneResult.suggestions);
 
-  // Voice consistency validation
   const voiceResult = validateVoice(section, brand);
   score *= voiceResult.score;
   issues.push(...voiceResult.issues);
   suggestions.push(...voiceResult.suggestions);
 
-  // Content quality validation
   const qualityResult = validateContentQuality(section);
   score *= qualityResult.score;
   issues.push(...qualityResult.issues);
@@ -39,7 +32,6 @@ export async function validateBrandAlignment(
 
   const isValid = score >= 0.7 && issues.length === 0;
 
-  // If not valid, attempt correction
   let correctedSection: Section | undefined;
   if (!isValid && score >= 0.5) {
     try {
@@ -49,58 +41,56 @@ export async function validateBrandAlignment(
     }
   }
 
-  return {
-    isValid,
-    score,
-    issues,
-    suggestions,
-    correctedSection
-  };
+  return { isValid, score, issues, suggestions, correctedSection };
 }
 
-// Validate tone alignment
-function validateTone(section: Section, tone: string): {
-  score: number;
-  issues: string[];
-  suggestions: string[];
-} {
+export async function validateBrandAlignment(
+  section: Section,
+  brand: Brand
+): Promise<BrandValidationResult> {
+  BrandValidationInputSchema.parse({ section, brand });
+  const result = await withMetrics('brand', 'validate', () =>
+    _validateBrandAlignment(section, brand)
+  );
+  return BrandValidationResultSchema.parse(result);
+}
+
+function validateTone(
+  section: Section,
+  tone: string
+): { score: number; issues: string[]; suggestions: string[] } {
   const issues: string[] = [];
   const suggestions: string[] = [];
   let score = 1.0;
 
   const sectionText = extractTextFromSection(section).toLowerCase();
 
-  const toneRules: Record<string, {
-    avoid: string[];
-    prefer: string[];
-    patterns: RegExp[];
-  }> = {
+  const toneRules: Record<string, { avoid: string[]; prefer: string[]; patterns: RegExp[] }> = {
     professional: {
       avoid: ['awesome', 'amazing', 'super', 'crazy', 'insane'],
       prefer: ['optimize', 'enhance', 'streamline', 'efficient'],
-      patterns: [/!{2,}/, /\b(lol|omg|wow)\b/]
+      patterns: [/!{2,}/, /\b(lol|omg|wow)\b/],
     },
     friendly: {
       avoid: ['utilize', 'leverage', 'synergize', 'paradigm'],
       prefer: ['use', 'help', 'simple', 'easy'],
-      patterns: [/\b(enterprise-grade|mission-critical)\b/]
+      patterns: [/\b(enterprise-grade|mission-critical)\b/],
     },
     authoritative: {
       avoid: ['maybe', 'perhaps', 'might', 'could'],
       prefer: ['proven', 'guaranteed', 'expert', 'leading'],
-      patterns: [/\?\?\?/, /\b(i think|i believe)\b/]
+      patterns: [/\?\?\?/, /\b(i think|i believe)\b/],
     },
     conversational: {
       avoid: ['aforementioned', 'heretofore', 'pursuant'],
       prefer: ['you', 'your', 'we', 'our'],
-      patterns: [/\b(per se|vis-à-vis)\b/]
-    }
+      patterns: [/\b(per se|vis-à-vis)\b/],
+    },
   };
 
   const rules = toneRules[tone.toLowerCase()];
   if (!rules) return { score, issues, suggestions };
 
-  // Check avoided words
   for (const word of rules.avoid) {
     if (sectionText.includes(word)) {
       issues.push(`Avoid "${word}" for ${tone} tone`);
@@ -108,15 +98,11 @@ function validateTone(section: Section, tone: string): {
     }
   }
 
-  // Check preferred words (bonus for using them)
-  const preferredCount = rules.prefer.filter(word =>
-    sectionText.includes(word)
-  ).length;
+  const preferredCount = rules.prefer.filter((word) => sectionText.includes(word)).length;
   if (preferredCount === 0) {
     suggestions.push(`Consider using words like: ${rules.prefer.slice(0, 3).join(', ')}`);
   }
 
-  // Check patterns
   for (const pattern of rules.patterns) {
     if (pattern.test(sectionText)) {
       issues.push(`Pattern "${pattern.source}" doesn't match ${tone} tone`);
@@ -127,27 +113,25 @@ function validateTone(section: Section, tone: string): {
   return { score: Math.max(0, score), issues, suggestions };
 }
 
-// Validate voice consistency
-function validateVoice(section: Section, brand: Brand): {
-  score: number;
-  issues: string[];
-  suggestions: string[];
-} {
+function validateVoice(
+  section: Section,
+  brand: Brand
+): { score: number; issues: string[]; suggestions: string[] } {
   const issues: string[] = [];
   const suggestions: string[] = [];
   let score = 1.0;
 
   const sectionText = extractTextFromSection(section);
 
-  // Check brand name consistency
   if (brand.name && !sectionText.includes(brand.name)) {
     suggestions.push(`Consider mentioning brand name "${brand.name}"`);
   }
 
-  // Check for excessive superlatives
   const superlatives = ['best', 'greatest', 'ultimate', 'perfect', 'revolutionary', 'game-changing'];
-  const superlativeCount = superlatives.reduce((count, word) =>
-    count + (sectionText.toLowerCase().match(new RegExp(`\\b${word}\\b`, 'g')) || []).length, 0
+  const superlativeCount = superlatives.reduce(
+    (count, word) =>
+      count + (sectionText.toLowerCase().match(new RegExp(`\\b${word}\\b`, 'g')) || []).length,
+    0
   );
 
   if (superlativeCount > 2) {
@@ -155,11 +139,10 @@ function validateVoice(section: Section, brand: Brand): {
     score -= 0.2;
   }
 
-  // Check for unverifiable claims
   const unverifiableClaims = [
     /\b(the best|#1|world's leading|industry leader)\b/i,
     /\b(revolutionary|groundbreaking|game-changing)\b/i,
-    /\b(100% guaranteed|never fails|always works)\b/i
+    /\b(100% guaranteed|never fails|always works)\b/i,
   ];
 
   for (const pattern of unverifiableClaims) {
@@ -172,34 +155,29 @@ function validateVoice(section: Section, brand: Brand): {
   return { score: Math.max(0, score), issues, suggestions };
 }
 
-// Validate content quality
-function validateContentQuality(section: Section): {
-  score: number;
-  issues: string[];
-  suggestions: string[];
-} {
+function validateContentQuality(
+  section: Section
+): { score: number; issues: string[]; suggestions: string[] } {
   const issues: string[] = [];
   const suggestions: string[] = [];
   let score = 1.0;
 
   const sectionText = extractTextFromSection(section);
 
-  // Check for PII patterns
   const piiPatterns = [
-    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/, // Email
-    /\b\d{3}-\d{3}-\d{4}\b/, // Phone
-    /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/ // Credit card
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/,
+    /\b\d{3}-\d{3}-\d{4}\b/,
+    /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/,
   ];
 
   for (const pattern of piiPatterns) {
     if (pattern.test(sectionText)) {
       issues.push('Contains potential PII - remove personal information');
-      score = 0; // Immediate fail for PII
+      score = 0;
     }
   }
 
-  // Check for profanity (simple list)
-  const profanity = ['damn', 'hell', 'crap', 'sucks']; // Basic list
+  const profanity = ['damn', 'hell', 'crap', 'sucks'];
   for (const word of profanity) {
     if (sectionText.toLowerCase().includes(word)) {
       issues.push(`Remove inappropriate language: "${word}"`);
@@ -207,7 +185,6 @@ function validateContentQuality(section: Section): {
     }
   }
 
-  // Check text length appropriateness
   if (section.type === 'hero') {
     const heroSection = section;
     if (heroSection.headline && heroSection.headline.length > 80) {
@@ -218,7 +195,6 @@ function validateContentQuality(section: Section): {
     }
   }
 
-  // Check for empty or too short content
   if (sectionText.trim().length < 10) {
     issues.push('Content too short - add more substance');
     score -= 0.5;
@@ -227,7 +203,6 @@ function validateContentQuality(section: Section): {
   return { score: Math.max(0, score), issues, suggestions };
 }
 
-// Extract all text from a section for analysis
 function extractTextFromSection(section: Section): string {
   let text = '';
 
@@ -245,7 +220,6 @@ function extractTextFromSection(section: Section): string {
   return text.trim();
 }
 
-// Correct brand issues using LLM
 async function correctBrandIssues(
   section: Section,
   brand: Brand,
@@ -262,48 +236,42 @@ Return ONLY the corrected JSON, maintaining the same structure and section type.
 
   const userPrompt = `Fix this section:\n${JSON.stringify(section, null, 2)}`;
 
-  try {
-    const content = await openaiChat({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 800,
-    });
-
-    const raw = JSON.parse(content);
-
-    if (raw.type !== section.type || raw.key !== section.key) {
-      throw new Error('Correction changed section structure');
-    }
-
-    return parseSection(raw);
-  } catch (error) {
-    console.error('Error correcting brand issues:', error);
-    throw error;
-  }
-}
-
-// Get brand score for entire storyboard
-export function getBrandScore(sections: Section[], brand: Brand): Promise<number> {
-  return Promise.all(
-    sections.map(section => validateBrandAlignment(section, brand))
-  ).then(results => {
-    const totalScore = results.reduce((sum, result) => sum + result.score, 0);
-    return totalScore / results.length;
+  const content = await openaiChat({
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: 0.3,
+    max_tokens: 800,
   });
+
+  const raw = JSON.parse(content);
+
+  if (raw.type !== section.type || raw.key !== section.key) {
+    throw new Error('Correction changed section structure');
+  }
+
+  return parseSection(raw);
 }
 
-// Generate brand-compliant alternatives
+export function getBrandScore(sections: Section[], brand: Brand): Promise<number> {
+  return Promise.all(sections.map((section) => validateBrandAlignment(section, brand))).then(
+    (results) => {
+      const totalScore = results.reduce((sum, result) => sum + result.score, 0);
+      return totalScore / results.length;
+    }
+  );
+}
+
 export async function generateBrandCompliantAlternative(
   section: Section,
   brand: Brand,
   targetTone?: string
 ): Promise<Section> {
-  const tone = targetTone || brand.tone;
+  return withMetrics('brand', 'generateAlternative', async () => {
+    const tone = targetTone || brand.tone;
 
-  const systemPrompt = `You are a conversion copywriter. Rewrite the section to perfectly match the brand guidelines.
+    const systemPrompt = `You are a conversion copywriter. Rewrite the section to perfectly match the brand guidelines.
 Brand: ${brand.name}
 Tone: ${tone}
 Palette colors: ${brand.palette.join(', ')}
@@ -311,21 +279,22 @@ Palette colors: ${brand.palette.join(', ')}
 Keep the same section type and structure. Make the copy more aligned with the brand voice.
 Return ONLY the JSON, no explanations.`;
 
-  const userPrompt = `Rewrite this section for better brand alignment:\n${JSON.stringify(section, null, 2)}`;
+    const userPrompt = `Rewrite this section for better brand alignment:\n${JSON.stringify(section, null, 2)}`;
 
-  try {
-    const content = await openaiChat({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.5,
-      max_tokens: 800,
-    });
+    try {
+      const content = await openaiChat({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.5,
+        max_tokens: 800,
+      });
 
-    return parseSection(JSON.parse(content));
-  } catch (error) {
-    console.error('Error generating brand-compliant alternative:', error);
-    return section; // Return original on error
-  }
+      return parseSection(JSON.parse(content));
+    } catch (error) {
+      console.error('Error generating brand-compliant alternative:', error);
+      return section;
+    }
+  });
 }

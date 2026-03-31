@@ -1,12 +1,18 @@
 import 'server-only';
 import { Section, generateVariantHash } from '@/lib/storyboard';
-import { WaterBottlePersona } from '@/lib/personas';
+import {
+  StrategistContextSchema,
+  VariantChoiceSchema,
+  DeployVariantInputSchema,
+  RecordConversionInputSchema,
+} from './contracts';
+import type { StrategistContext, VariantChoice } from './contracts';
 import {
   chooseVariant,
   initializeBanditArm,
   updateBanditState,
   BanditArm,
-  BanditState
+  BanditState,
 } from '../bandit';
 import {
   getBanditState,
@@ -14,26 +20,13 @@ import {
   getAllBanditStates,
   getBanditStatesForStory,
   getConversionEvents,
-  trackEvent
+  trackEvent,
 } from '../database';
+import { withMetrics } from '../metrics';
 
-export interface VariantChoice {
-  sectionKey: string;
-  variantHash: string;
-  section: Section;
-  confidence: number;
-  isNew: boolean;
-}
+export type { StrategistContext, VariantChoice };
 
-export interface StrategistContext {
-  storyId: string;
-  persona: WaterBottlePersona;
-  sectionKey: string;
-  availableVariants: Section[];
-}
-
-// Main strategist function - chooses best variant using Thompson Sampling
-export async function chooseOptimalVariant(context: StrategistContext): Promise<VariantChoice> {
+async function _chooseOptimalVariant(context: StrategistContext): Promise<VariantChoice> {
   const { storyId, persona, sectionKey, availableVariants } = context;
 
   if (availableVariants.length === 0) {
@@ -43,8 +36,6 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
   if (availableVariants.length === 1) {
     const variant = availableVariants[0];
     const variantHash = await generateVariantHash(variant);
-
-    // Initialize bandit state if doesn't exist
     await ensureBanditState(storyId, sectionKey, variantHash);
 
     return {
@@ -52,22 +43,16 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
       variantHash,
       section: variant,
       confidence: 1.0,
-      isNew: false
+      isNew: false,
     };
   }
 
-  // Hash all variants and fetch all bandit states in parallel
-  const variantHashes = await Promise.all(
-    availableVariants.map((v) => generateVariantHash(v))
-  );
+  const variantHashes = await Promise.all(availableVariants.map((v) => generateVariantHash(v)));
 
   const banditStates = await Promise.all(
-    variantHashes.map((variantHash) =>
-      getBanditState(storyId, sectionKey, variantHash)
-    )
+    variantHashes.map((variantHash) => getBanditState(storyId, sectionKey, variantHash))
   );
 
-  // Ensure bandit state exists for any missing (parallel), then build arms in order
   const resolvedStates = await Promise.all(
     banditStates.map(async (banditState, i) => {
       const variantHash = variantHashes[i];
@@ -83,28 +68,26 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
   const banditArms: BanditArm[] = resolvedStates.map(({ variantHash, state }) => ({
     arm: { storyId, section: sectionKey, variant: variantHash },
     alpha: state.alpha,
-    beta: state.beta
+    beta: state.beta,
   }));
 
-  // Use Thompson Sampling to choose variant
   const chosenArm = await chooseVariant(banditArms);
-  const chosenIndex = banditArms.findIndex(arm => arm.arm.variant === chosenArm.variant);
+  const chosenIndex = banditArms.findIndex((arm) => arm.arm.variant === chosenArm.variant);
   const chosenVariant = chosenIndex >= 0 ? availableVariants[chosenIndex] : undefined;
 
   if (!chosenVariant) {
     throw new Error('Could not find chosen variant');
   }
 
-  // Calculate confidence based on bandit state
-  const chosenBanditArm = banditArms.find(arm => arm.arm.variant === chosenArm.variant);
-  const confidence = chosenBanditArm ?
-    chosenBanditArm.alpha / (chosenBanditArm.alpha + chosenBanditArm.beta) : 0.5;
+  const chosenBanditArm = banditArms.find((arm) => arm.arm.variant === chosenArm.variant);
+  const confidence = chosenBanditArm
+    ? chosenBanditArm.alpha / (chosenBanditArm.alpha + chosenBanditArm.beta)
+    : 0.5;
 
-  // Track the selection
   await trackEvent(storyId, persona, sectionKey, chosenArm.variant, 'variantSelected', {
     confidence,
     alpha: chosenBanditArm?.alpha,
-    beta: chosenBanditArm?.beta
+    beta: chosenBanditArm?.beta,
   });
 
   return {
@@ -112,75 +95,81 @@ export async function chooseOptimalVariant(context: StrategistContext): Promise<
     variantHash: chosenArm.variant,
     section: chosenVariant,
     confidence,
-    isNew: chosenBanditArm?.alpha === 1 && chosenBanditArm?.beta === 1
+    isNew: chosenBanditArm?.alpha === 1 && chosenBanditArm?.beta === 1,
   };
 }
 
-// Deploy new variant and update bandit state
+export async function chooseOptimalVariant(context: StrategistContext): Promise<VariantChoice> {
+  const validated = StrategistContextSchema.parse(context);
+  const result = await withMetrics('strategist', 'chooseVariant', () =>
+    _chooseOptimalVariant(validated)
+  );
+  return VariantChoiceSchema.parse(result);
+}
+
 export async function deployVariant(
   storyId: string,
-  persona: WaterBottlePersona,
+  persona: string,
   sectionKey: string,
   section: Section
 ): Promise<string> {
-  const variantHash = await generateVariantHash(section);
+  DeployVariantInputSchema.parse({ storyId, persona, sectionKey, section });
 
-  // Ensure bandit state exists
-  await ensureBanditState(storyId, sectionKey, variantHash);
-
-  // Track deployment
-  await trackEvent(storyId, persona, sectionKey, variantHash, 'variantDeployed', {
-    section: section
+  return withMetrics('strategist', 'deployVariant', async () => {
+    const variantHash = await generateVariantHash(section);
+    await ensureBanditState(storyId, sectionKey, variantHash);
+    await trackEvent(storyId, persona, sectionKey, variantHash, 'variantDeployed', { section });
+    return variantHash;
   });
-
-  return variantHash;
 }
 
-// Record reward for conversion event
 export async function recordConversion(
   storyId: string,
-  persona: WaterBottlePersona,
+  persona: string,
   sectionKey: string,
   variantHash: string,
   reward: number = 1
 ): Promise<void> {
-  const banditState = await getBanditState(storyId, sectionKey, variantHash);
+  RecordConversionInputSchema.parse({ storyId, persona, sectionKey, variantHash, reward });
 
-  if (!banditState) {
-    // Initialize if doesn't exist
-    const newState = initializeBanditArm(storyId, sectionKey, variantHash);
-    await saveBanditState(updateBanditState(newState, reward));
-  } else {
-    const updatedState = updateBanditState(banditState, reward);
-    await saveBanditState(updatedState);
-  }
+  return withMetrics('strategist', 'recordConversion', async () => {
+    const banditState = await getBanditState(storyId, sectionKey, variantHash);
 
-  // Track the conversion
-  await trackEvent(storyId, persona, sectionKey, variantHash, 'conversion', {
-    reward
+    if (!banditState) {
+      const newState = initializeBanditArm(storyId, sectionKey, variantHash);
+      await saveBanditState(updateBanditState(newState, reward));
+    } else {
+      const updatedState = updateBanditState(banditState, reward);
+      await saveBanditState(updatedState);
+    }
+
+    await trackEvent(storyId, persona, sectionKey, variantHash, 'conversion', { reward });
   });
 }
 
-// Process timeout events to record no-conversion (all sections for the story)
-export async function processTimeouts(storyId: string, timeoutMinutes: number = 5): Promise<void> {
-  const allStates = await getBanditStatesForStory(storyId);
+export async function processTimeouts(
+  storyId: string,
+  timeoutMinutes: number = 5
+): Promise<void> {
+  return withMetrics('strategist', 'processTimeouts', async () => {
+    const allStates = await getBanditStatesForStory(storyId);
 
-  for (const state of allStates) {
-    const conversions = await getConversionEvents(
-      storyId,
-      state.sectionKey,
-      state.variantHash,
-      timeoutMinutes
-    );
+    for (const state of allStates) {
+      const conversions = await getConversionEvents(
+        storyId,
+        state.sectionKey,
+        state.variantHash,
+        timeoutMinutes
+      );
 
-    if (conversions === 0) {
-      const updatedState = updateBanditState(state, 0);
-      await saveBanditState(updatedState);
+      if (conversions === 0) {
+        const updatedState = updateBanditState(state, 0);
+        await saveBanditState(updatedState);
+      }
     }
-  }
+  });
 }
 
-// Get performance metrics for a section
 export async function getSectionPerformance(
   storyId: string,
   sectionKey: string
@@ -196,47 +185,47 @@ export async function getSectionPerformance(
   bestVariant: string;
   totalTrials: number;
 }> {
-  const banditStates = await getAllBanditStates(storyId, sectionKey);
+  return withMetrics('strategist', 'getSectionPerformance', async () => {
+    const banditStates = await getAllBanditStates(storyId, sectionKey);
 
-  const variants = banditStates.map(state => {
-    const conversionRate = state.alpha / (state.alpha + state.beta);
-    const trials = state.alpha + state.beta - 2;
+    const variants = banditStates.map((state) => {
+      const conversionRate = state.alpha / (state.alpha + state.beta);
+      const trials = state.alpha + state.beta - 2;
 
-    // Simple confidence interval calculation
-    const variance = (state.alpha * state.beta) /
-      ((state.alpha + state.beta) ** 2 * (state.alpha + state.beta + 1));
-    const stdError = Math.sqrt(variance);
-    const margin = 1.96 * stdError; // 95% confidence
+      const variance =
+        (state.alpha * state.beta) /
+        ((state.alpha + state.beta) ** 2 * (state.alpha + state.beta + 1));
+      const stdError = Math.sqrt(variance);
+      const margin = 1.96 * stdError;
+
+      return {
+        variantHash: state.variantHash,
+        alpha: state.alpha,
+        beta: state.beta,
+        conversionRate,
+        confidence: [Math.max(0, conversionRate - margin), Math.min(1, conversionRate + margin)] as [
+          number,
+          number,
+        ],
+        trials,
+      };
+    });
+
+    const bestVariant = variants.reduce(
+      (best, current) => (current.conversionRate > best.conversionRate ? current : best),
+      variants[0]
+    );
+
+    const totalTrials = variants.reduce((sum, v) => sum + v.trials, 0);
 
     return {
-      variantHash: state.variantHash,
-      alpha: state.alpha,
-      beta: state.beta,
-      conversionRate,
-      confidence: [
-        Math.max(0, conversionRate - margin),
-        Math.min(1, conversionRate + margin)
-      ] as [number, number],
-      trials
+      variants,
+      bestVariant: bestVariant?.variantHash || '',
+      totalTrials,
     };
   });
-
-  // Find best performing variant
-  const bestVariant = variants.reduce((best, current) =>
-    current.conversionRate > best.conversionRate ? current : best,
-    variants[0]
-  );
-
-  const totalTrials = variants.reduce((sum, v) => sum + v.trials, 0);
-
-  return {
-    variants,
-    bestVariant: bestVariant?.variantHash || '',
-    totalTrials
-  };
 }
 
-// Ensure bandit state exists for a variant
 async function ensureBanditState(
   storyId: string,
   sectionKey: string,
@@ -252,19 +241,11 @@ async function ensureBanditState(
   return state;
 }
 
-// Reset bandit for a section (useful for testing)
-export async function resetSectionBandit(
-  storyId: string,
-  sectionKey: string
-): Promise<void> {
+export async function resetSectionBandit(storyId: string, sectionKey: string): Promise<void> {
   const states = await getAllBanditStates(storyId, sectionKey);
 
   for (const state of states) {
-    const resetState = {
-      ...state,
-      alpha: 1,
-      beta: 1
-    };
+    const resetState = { ...state, alpha: 1, beta: 1 };
     await saveBanditState(resetState);
   }
 

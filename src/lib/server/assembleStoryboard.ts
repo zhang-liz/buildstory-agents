@@ -2,7 +2,7 @@ import 'server-only';
 import { chooseOptimalVariant } from './agents/strategist';
 import { getAllStoryboardsForPersona } from './database';
 import { Storyboard, Section, SectionVariantHashes, generateVariantHash } from '@/lib/storyboard';
-import { WaterBottlePersona } from '@/lib/personas';
+import { withMetrics } from './metrics';
 
 /**
  * Collect unique section variants for a section key from all storyboard versions.
@@ -44,50 +44,52 @@ async function getSectionVariants(
  */
 export async function assembleStoryboard(
   storyId: string,
-  persona: WaterBottlePersona,
+  persona: string,
   baseStoryboard: Storyboard
 ): Promise<{ storyboard: Storyboard; sectionVariantHashes: SectionVariantHashes }> {
-  const allStoryboards = await getAllStoryboardsForPersona(storyId, persona);
+  return withMetrics('assembler', 'assemble', async () => {
+    const allStoryboards = await getAllStoryboardsForPersona(storyId, persona);
 
-  const results = await Promise.all(
-    baseStoryboard.sections.map(async (section) => {
-      try {
-        const availableVariants = await getSectionVariants(
-          section.key,
-          allStoryboards,
-          section
-        );
+    const results = await Promise.all(
+      baseStoryboard.sections.map(async (section) => {
+        try {
+          const availableVariants = await getSectionVariants(
+            section.key,
+            allStoryboards,
+            section
+          );
 
-        const chosenVariant = await chooseOptimalVariant({
-          storyId,
-          persona,
-          sectionKey: section.key,
-          availableVariants
-        });
+          const chosenVariant = await chooseOptimalVariant({
+            storyId,
+            persona,
+            sectionKey: section.key,
+            availableVariants,
+          });
 
-        return {
-          key: section.key,
-          section: chosenVariant.section,
-          variantHash: chosenVariant.variantHash
-        };
-      } catch (error) {
-        console.error(`Error assembling section ${section.key}:`, error);
-        return { key: section.key, section, variantHash: '' };
-      }
-    })
-  );
+          return {
+            key: section.key,
+            section: chosenVariant.section,
+            variantHash: chosenVariant.variantHash,
+          };
+        } catch (error) {
+          console.error(`Error assembling section ${section.key}:`, error);
+          return { key: section.key, section, variantHash: '' };
+        }
+      })
+    );
 
-  const assembledSections = results.map((r) => r.section);
-  const sectionVariantHashes: SectionVariantHashes = {};
-  for (const r of results) {
-    if (r.variantHash) sectionVariantHashes[r.key] = r.variantHash;
-  }
+    const assembledSections = results.map((r) => r.section);
+    const sectionVariantHashes: SectionVariantHashes = {};
+    for (const r of results) {
+      if (r.variantHash) sectionVariantHashes[r.key] = r.variantHash;
+    }
 
-  const storyboard: Storyboard = {
-    ...baseStoryboard,
-    persona,
-    sections: assembledSections
-  };
+    const storyboard: Storyboard = {
+      ...baseStoryboard,
+      persona,
+      sections: assembledSections,
+    };
 
-  return { storyboard, sectionVariantHashes };
+    return { storyboard, sectionVariantHashes };
+  });
 }
