@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+developer-docs/node_modules
 /.pnp
 .pnp.*
 package-lock.json
@@ -18,13 +19,15 @@ package-lock.json
 /.next/
 /out/
 
-# environment variables
+# environment variables (keep .env.example committed as a template)
 .env
 .env.local
 .env.*.local
 
 # production
 /build
+developer-docs/build
+developer-docs/.docusaurus
 
 # misc
 .DS_Store
@@ -36,8 +39,10 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# other env files — do not use a bare `.env*` here or `.env.example` cannot be tracked
+.env.development
+.env.production
+.env.test
 
 # vercel
 .vercel
