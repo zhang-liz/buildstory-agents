@@ -2,6 +2,8 @@
 
 **Autonomous AI agents for real-time landing page optimization**
 
+> **Maintenance:** Community-driven; best-effort reviews and fixes. PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 BuildStory.Agents is a Next.js application where autonomous AI agents generate, test, and optimize landing pages in real-time using multi-armed bandits and persona-based targeting.
 
 ## 🎯 What It Does
@@ -46,7 +48,7 @@ BuildStory.Agents is a Next.js application where autonomous AI agents generate, 
 
 ### 2. Installation
 ```bash
-git clone <your-repo>
+git clone https://github.com/<org-or-user>/buildstory-agents.git
 cd buildstory-agents
 bun install
 ```
@@ -57,18 +59,17 @@ bun install
 3. Copy your Supabase URL and anon key
 
 ### 4. Environment Configuration
-Create a `.env.local` file in the project root with the required secrets:
-```env
-OPENAI_API_KEY=sk-your-openai-key-here
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-supabase-anon-key
+Copy the template and edit values:
+
+```bash
+cp .env.example .env.local
 ```
 
 - **Required**: `OPENAI_API_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`. The app throws a clear error at startup if Supabase vars are missing, and on first LLM use if `OPENAI_API_KEY` is missing.
 - **Optional**: `OPENAI_MODEL` — OpenAI chat model for content generation (default: `gpt-4o`). Set to e.g. `gpt-4-turbo` if you prefer.
 - **Optional (rate limiting)**: `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` — when set, rewrite and track APIs use Redis for rate limits across instances; otherwise in-memory limits are used.
 
-The app expects these variables in both the Next.js runtime and the Supabase maintenance scripts (`node update_schema.js`). No example file is shipped, so copy the snippet above directly.
+The app expects these variables in both the Next.js runtime and the Supabase maintenance scripts (`node update_schema.js`). See `.env.example` for all variable names.
 
 ### 5. Run Development Server
 ```bash
@@ -77,7 +78,19 @@ bun dev
 
 Visit `http://localhost:3000` to see the application.
 
-### 6. Database Helpers (Optional)
+### 6. Docker (optional)
+
+If you prefer not to install Bun on the host, use Docker Compose after you have a `.env.local` with the same variables as local development:
+
+```bash
+cp .env.example .env.local
+# edit .env.local with real keys, then:
+docker compose up --build
+```
+
+The app is served at `http://localhost:3000`. The compose file bind-mounts the repo and uses a named volume for `node_modules` inside the container.
+
+### 7. Database Helpers (Optional)
 Run `node update_schema.js` to ensure the `events` table accepts the latest persona set (`athlete`, `commuter`, `outdoor`, `family`). This script calls the Supabase `exec_sql` RPC, which should be defined as:
 ```sql
 create or replace function exec_sql(sql text)
@@ -243,7 +256,7 @@ Unit tests for metrics collection are available in `src/lib/__tests__/agentMetri
 
 To run tests:
 ```bash
-npx vitest run
+bun run test
 ```
 
 ## 🎨 Section Types
@@ -377,6 +390,14 @@ src/
 - **bun lint**: Type-checks with `tsc --noEmit` then runs `next lint`
 - **bun run format**: Applies Biome formatting defaults
 
+### Developer documentation (Docusaurus)
+
+Technical docs (architecture, API reference, extending agents) live in [`developer-docs/`](developer-docs/). From the repo root:
+
+```bash
+bun run docs:dev
+```
+
 ### Adding New Section Types
 1. Add type to Zod schema in `storyboard.ts`
 2. Create React component in `components/sections/`
@@ -385,11 +406,7 @@ src/
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks before opening a PR, and how to run `update_schema.js`. Participants are expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Security disclosures: [SECURITY.md](SECURITY.md).
 
 ## 📄 License
 
