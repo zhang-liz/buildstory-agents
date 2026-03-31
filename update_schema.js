@@ -1,5 +1,6 @@
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
+require('dotenv').config({ path: '.env' });
+require('dotenv').config({ path: '.env.local', override: true });
 
 // Load environment variables
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -7,7 +8,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Error: Missing required environment variables SUPABASE_URL and/or SUPABASE_ANON_KEY');
-  console.error('Please create a .env file with these variables. See .env.example for reference.');
+  console.error('Set SUPABASE_URL and SUPABASE_ANON_KEY in .env.local or .env (see .env.example).');
   process.exit(1);
 }
 
