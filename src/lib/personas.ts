@@ -164,6 +164,16 @@ export const personaThemes: Record<WaterBottlePersona, PersonaTheme> = {
   }
 };
 
+/**
+ * Safely resolve any persona string to a known WaterBottlePersona.
+ * Returns the matching persona if it's one of the 4 known types,
+ * otherwise defaults to 'commuter'.
+ */
+export function resolvePersona(persona: string): WaterBottlePersona {
+  if (persona in personaThemes) return persona as WaterBottlePersona;
+  return 'commuter';
+}
+
 // Helper to get theme classes
 export function getThemeClasses(persona: WaterBottlePersona) {
   const theme = personaThemes[persona];
