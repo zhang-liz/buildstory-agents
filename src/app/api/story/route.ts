@@ -13,17 +13,19 @@ const StoryRequestSchema = z.object({
   brief: z.string().min(10).max(500),
   tone: z.string().optional().default('professional'),
   palette: z.array(z.string()).optional().default(['#059669', '#15803d', '#0d9488']),
-  brandName: z.string().optional().default('HydroFlow')
+  brandName: z.string().optional().default('HydroFlow'),
+  vertical: z.string().optional().default('general'),
 });
 
 // Generate water bottle storyboard using LLM
 async function generateWaterBottleStoryboard(
   brief: string,
   tone: string,
-  persona: WaterBottlePersona,
+  persona: string,
   brandName: string
 ): Promise<Storyboard> {
-  const personaTheme = personaThemes[persona];
+  const knownPersona = (persona in personaThemes ? persona : 'commuter') as WaterBottlePersona;
+  const personaTheme = personaThemes[knownPersona];
 
   const systemPrompt = `You are a conversion copy expert for water bottle products. Given a product brief and buyer persona, output ONLY a complete Storyboard JSON matching this exact schema:
 
@@ -82,10 +84,11 @@ Generate complete water bottle storyboard JSON for ${persona} buyers.`;
 function getWaterBottleTemplateStoryboard(
   brief: string,
   tone: string,
-  persona: WaterBottlePersona,
+  persona: string,
   brandName: string
 ): Storyboard {
-  const theme = personaThemes[persona];
+  const knownPersona = (persona in personaThemes ? persona : 'commuter') as WaterBottlePersona;
+  const theme = personaThemes[knownPersona];
 
   return {
     version: 1,
@@ -209,7 +212,7 @@ export async function POST(request: NextRequest) {
 
     // Parse and validate request
     const body = await request.json();
-    const { brief, tone, palette, brandName } = StoryRequestSchema.parse(body);
+    const { brief, tone, palette, brandName, vertical } = StoryRequestSchema.parse(body);
 
     // Extract persona context from request
     const personaContext = extractPersonaContext(request);
@@ -244,7 +247,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save to database
-    const story = await createStory(brief || 'Premium water bottle', storyboard.brand);
+    const story = await createStory(brief || 'Premium water bottle', storyboard.brand, vertical);
     const variantHash = await generateVariantHash(storyboard.sections[0]);
 
     await saveStoryboard(story.id, personaResult.label, variantHash, storyboard);
@@ -294,7 +297,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-const STORY_GET_PERSONAS: WaterBottlePersona[] = ['athlete', 'commuter', 'outdoor', 'family'];
+const STORY_GET_PERSONAS = ['athlete', 'commuter', 'outdoor', 'family'];
 
 // GET method to retrieve existing story
 export async function GET(request: NextRequest) {
@@ -321,13 +324,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Use requested persona if valid, otherwise fallback order
-    const personasToTry: WaterBottlePersona[] = personaParam && STORY_GET_PERSONAS.includes(personaParam as WaterBottlePersona)
-      ? [personaParam as WaterBottlePersona]
+    const personasToTry = personaParam
+      ? [personaParam]
       : ['commuter', 'athlete', 'outdoor', 'family'];
 
     let storyboardRecord = null;
-    let resolvedPersona: WaterBottlePersona = personasToTry[0];
+    let resolvedPersona = personasToTry[0];
     for (const p of personasToTry) {
       storyboardRecord = await getLatestStoryboard(storyId, p);
       if (storyboardRecord) {

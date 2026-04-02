@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Storyboard, Section, SectionVariantHashes } from '@/lib/storyboard';
-import { WaterBottlePersona, personaThemes } from '@/lib/personas';
+import { personaThemes, resolvePersona } from '@/lib/personas';
 import { PersonaBar } from '@/components/PersonaBar';
 import { SmartCTA } from '@/components/SmartCTA';
 import { MetricChips } from '@/components/MetricChips';
@@ -28,7 +28,7 @@ interface StoryboardRendererProps {
   /** Section key -> variant hash for bandit/tracking attribution (empty when storyboard loaded via API e.g. persona switch) */
   sectionVariantHashes?: SectionVariantHashes;
   persona: {
-    detected: WaterBottlePersona;
+    detected: string;
     confidence: number;
     reasoning: string;
   };
@@ -64,7 +64,7 @@ export function StoryboardRenderer({
   }, [storyId]);
 
   // Handle persona change
-  const handlePersonaChange = async (newPersona: WaterBottlePersona) => {
+  const handlePersonaChange = async (newPersona: string) => {
     if (newPersona === currentPersona) return;
 
     setIsLoading(true);
@@ -114,7 +114,7 @@ export function StoryboardRenderer({
           <Hero
             {...common}
             section={section}
-            persona={currentPersona}
+            persona={resolvePersona(currentPersona)}
             onCtaClick={(ctaIndex) =>
               handleCtaClick(section.key, variantHash, ctaIndex, section.cta[ctaIndex]?.text ?? '')
             }
@@ -172,7 +172,7 @@ export function StoryboardRenderer({
 
       {/* Persona Bar */}
       <PersonaBar
-        currentPersona={currentPersona}
+        currentPersona={resolvePersona(currentPersona)}
         confidence={personaConfidence}
         onPersonaChange={handlePersonaChange}
         storyId={storyId}
@@ -219,8 +219,8 @@ export function StoryboardRenderer({
 
       {/* Smart CTA Dock */}
       <SmartCTA
-        persona={currentPersona}
-        onCtaClick={() => handleCtaClick('smart-cta', sectionVariantHashes['hero'] ?? '', 0, personaThemes[currentPersona].copy.cta)}
+        persona={resolvePersona(currentPersona)}
+        onCtaClick={() => handleCtaClick('smart-cta', sectionVariantHashes['hero'] ?? '', 0, personaThemes[resolvePersona(currentPersona)].copy.cta)}
       />
 
       {/* Footer with Metrics */}
@@ -233,13 +233,13 @@ export function StoryboardRenderer({
         <div className="max-w-6xl mx-auto">
           {/* Metric Chips */}
           <div className="mb-8">
-            <MetricChips persona={currentPersona} />
+            <MetricChips persona={resolvePersona(currentPersona)} />
           </div>
 
           <div className="text-center">
             <h3 className="text-2xl font-bold mb-4">{storyboard.brand.name}</h3>
             <p className="text-gray-400 mb-6 max-w-2xl mx-auto">
-              {personaThemes[currentPersona].copy.reassurance}
+              {personaThemes[resolvePersona(currentPersona)].copy.reassurance}
             </p>
             <div className="text-sm text-gray-500">
               Trusted by thousands of {currentPersona === 'athlete' ? 'athletes' :

@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import { getStory, getLatestStoryboard } from '@/lib/server/database';
-import { classifyPersona, extractPersonaContext } from '@/lib/server/agents/persona';
+import { extractPersonaContext } from '@/lib/server/agents/persona';
+import { classifyPersonaDynamic } from '@/lib/server/personaEngine';
 import { assembleStoryboard } from '@/lib/server/assembleStoryboard';
 import { StoryboardRenderer } from './StoryboardRenderer';
-import { WaterBottlePersona } from '@/lib/personas';
 import { headers } from 'next/headers';
 
 interface PageProps {
@@ -12,12 +12,8 @@ interface PageProps {
 }
 
 export default async function StoryPage({ params, searchParams }: PageProps) {
-  const [{ storyId }, resolvedSearchParams] = await Promise.all([
-    params,
-    searchParams,
-  ]);
+  const [{ storyId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
 
-  // Load story and classify persona in parallel (independent work)
   const [story, personaResult] = await Promise.all([
     getStory(storyId),
     (async () => {
@@ -26,20 +22,13 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
       for (const [key, value] of headersList.entries()) {
         headersObject[key] = value;
       }
-      const mockRequest = new Request("http://localhost", {
-        headers: headersObject,
-      });
+      const mockRequest = new Request('http://localhost', { headers: headersObject });
       const personaContext = extractPersonaContext(mockRequest);
-      if (
-        resolvedSearchParams.persona &&
-        ["athlete", "commuter", "outdoor", "family"].includes(
-          resolvedSearchParams.persona
-        )
-      ) {
-        personaContext.pollResult =
-          resolvedSearchParams.persona as WaterBottlePersona;
+      if (resolvedSearchParams.persona) {
+        personaContext.pollResult = resolvedSearchParams.persona;
       }
-      return classifyPersona(personaContext);
+      const vertical = undefined; // Resolved from story below if needed
+      return classifyPersonaDynamic(personaContext, vertical);
     })(),
   ]);
 
@@ -47,12 +36,10 @@ export default async function StoryPage({ params, searchParams }: PageProps) {
     notFound();
   }
 
-  // Get latest storyboard for this persona
   let storyboard = await getLatestStoryboard(storyId, personaResult.label);
 
   if (!storyboard) {
-    // Fallback to any available storyboard
-    const fallbackPersonas: WaterBottlePersona[] = ['commuter', 'athlete', 'outdoor', 'family'];
+    const fallbackPersonas = ['commuter', 'athlete', 'outdoor', 'family'];
     for (const fallbackPersona of fallbackPersonas) {
       storyboard = await getLatestStoryboard(storyId, fallbackPersona);
       if (storyboard) break;
