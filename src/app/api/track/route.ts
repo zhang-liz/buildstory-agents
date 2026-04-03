@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { trackEvent } from '@/lib/server/database';
 import { recordConversion } from '@/lib/server/agents/strategist';
 import { classifyPersona, extractPersonaContext, validatePersonaPoll } from '@/lib/server/agents/persona';
-import { WaterBottlePersona } from '@/lib/personas';
 import { checkRateLimit } from '@/lib/server/rateLimit';
 
 // Event schema
@@ -45,15 +44,27 @@ async function processEvent(
   }
 
   // Handle conversion events
-  if (eventType === 'ctaClick' || eventType === 'conversion') {
-    if (variantHash) {
-      // Record conversion for bandit
-      await recordConversion(storyId, persona as WaterBottlePersona, sectionKey, variantHash, 1);
+  // Weighted conversion signals for the multi-armed bandit
+  if (variantHash) {
+    const REWARD_WEIGHTS: Record<string, number | ((m: Record<string, unknown>) => number)> = {
+      ctaClick: 1.0,
+      conversion: 1.0,
+      scrollDepth: (m) => (Number(m?.depth) >= 75 ? 0.3 : 0),
+      dwell: (m) => (Number(m?.duration) >= 60 ? 0.2 : 0),
+      engagement: 0.15,
+    };
+
+    const weightOrFn = REWARD_WEIGHTS[eventType];
+    if (weightOrFn !== undefined) {
+      const reward =
+        typeof weightOrFn === 'function' ? weightOrFn(meta as Record<string, unknown>) : weightOrFn;
+      if (reward > 0) {
+        await recordConversion(storyId, persona, sectionKey, variantHash, reward);
+      }
     }
   }
 
-  // Track all events
-  await trackEvent(storyId, persona as WaterBottlePersona, sectionKey, variantHash || '', eventType, meta);
+  await trackEvent(storyId, persona, sectionKey, variantHash || '', eventType, meta);
 
   return { success: true };
 }
